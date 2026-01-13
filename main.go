@@ -8,9 +8,11 @@ import (
 )
 
 func main() {
+	port := "8080" // os.Getenv("PORT")
 
 	mux := http.NewServeMux()
-	port := "8080" // os.Getenv("PORT")
+	mux.Handle("/", http.FileServer(http.Dir(".")))
+	// mux.Handle("/assets", http.FileServer(http.Dir("./assets/logo.png")))
 	
 	/* A http.Server is a struct that describes a server configuration */
 	server := http.Server{
@@ -19,12 +21,9 @@ func main() {
 
 	} 
 
-	mux.Handle("/", http.FileServer(http.Dir(".")))
-	
 	fmt.Printf("Server started on: %v...\n", port)
 	
 	/* ListenAndServe() blocks the main function until the server shuts down or an
 	unexpected error crashes it. */
-	err := server.ListenAndServe()
-	log.Fatal(err)
+	log.Fatal(server.ListenAndServe())
 } // End main() func
