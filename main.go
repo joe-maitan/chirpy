@@ -1,16 +1,22 @@
 package main
 
 import (
-	// "os"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"strings"
 	"sync/atomic"
+
+	"github.com/joe-maitan/chirpy/internal/database"
+	_ "github.com/lib/pq"
 )
 
 type apiConfig struct {
 	fileserverHits atomic.Int32
+	db             *database.Queries
 } // End apiConfig struct
 
 func handlerReadiness(w http.ResponseWriter, r *http.Request) {
@@ -70,11 +76,18 @@ func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
 } // End respondWithJSON() func
 
 func validateChirp(w http.ResponseWriter, r *http.Request) {
+	badWords := []string {
+		"kerfuffle",
+		"sharbert",
+		"fornax",
+	}
+
 	type parameters struct {
 		Body string `json:"body"`
 	}
 
 	type returnVals struct {
+		CleanedBody string `json:"cleaned_body"`
 		Valid bool `json:"valid"`
 	}
 
@@ -86,13 +99,25 @@ func validateChirp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 1. Validate the length of the chirp.
 	const maxChirpLength = 140
 	if len(params.Body) > maxChirpLength {
 		respondWithError(w, http.StatusBadRequest, "Chirp is too long", nil)
 		return
 	}
 
+	// 2. Clean the chirp for any bad words.
+	words := strings.Split(params.Body, " ")
+	for _, word := range words {
+		for _, pottyWord := range badWords {
+			if strings.Contains(strings.ToLower(word), strings.ToLower(pottyWord)) {
+				params.Body = strings.ReplaceAll(params.Body, word, "****")
+			}
+		}
+	}
+
 	respondWithJSON(w, http.StatusOK, returnVals{
+		CleanedBody: params.Body,
 		Valid: true,
 	})
 } // End validateChirp() func
@@ -101,9 +126,21 @@ func main() {
 	const filepathRoot = "."
 	const port = "8080" // os.Getenv("PORT")
 
+	dbURL := os.Getenv("DB_URL")
+	if dbURL == "" {
+		log.Fatal("DB_URL must be set")
+	}
+
+	dbConn, err := sql.Open("postgres", dbURL)
+	if err != nil {
+		log.Fatalf("Error opening database: %s", err)
+	}
+
+	dbQueries := database.New(dbConn)
 	
 	apiCfg := apiConfig{
 		fileserverHits: atomic.Int32{},
+		db: dbQueries,
 	}
 
 	mux := http.NewServeMux()
