@@ -30,6 +30,14 @@ type User struct {
 	Email     string    `json:"email"`
 } // End User struct
 
+type Chirp struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Body	  string 	`json:"body"`
+	UserID    uuid.UUID `json:"user_id"`
+}
+
 func handlerReadiness(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
@@ -87,7 +95,63 @@ func (cfg *apiConfig) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 		UpdatedAt: user.UpdatedAt,
 		Email: user.Email,
 	})
-}
+} // End handleCreateUser() func
+
+func (cfg *apiConfig) handleCreateChirp(w http.ResponseWriter, r *http.Request) {
+	badWords := []string {
+		"kerfuffle",
+		"sharbert",
+		"fornax",
+	}
+
+	type parameters struct {
+		Body string `json:"body"`
+		UserID uuid.UUID `json:"user_id"`
+	}
+
+	decoder := json.NewDecoder(r.Body)
+	params := parameters{}
+	err := decoder.Decode(&params)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error decoding parameters", err)
+		return
+	}
+
+	// 1. Validate the length of the chirp.
+	const maxChirpLength = 140
+	if len(params.Body) > maxChirpLength {
+		respondWithError(w, http.StatusBadRequest, "Chirp is too long", nil)
+		return
+	}
+
+	// 2. Clean the chirp for any bad words.
+	words := strings.Split(params.Body, " ")
+	for _, word := range words {
+		for _, pottyWord := range badWords {
+			if strings.Contains(strings.ToLower(word), strings.ToLower(pottyWord)) {
+				params.Body = strings.ReplaceAll(params.Body, word, "****")
+			}
+		}
+	}
+
+	chirp, err := cfg.db.CreateChirp(r.Context(), database.CreateChirpParams{
+		Body: params.Body,
+		UserID: params.UserID,
+	})
+
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error creating chirp", err)
+		return
+	}
+
+	respondWithJSON(w, http.StatusCreated, Chirp{
+		ID: 	   chirp.ID,
+		CreatedAt: chirp.CreatedAt,
+		UpdatedAt: chirp.UpdatedAt,
+		Body: 	   chirp.Body,
+		UserID:    chirp.UserID,
+	})
+} // End handleCreateChirp() func
 
 func respondWithError(w http.ResponseWriter, code int, msg string, err error) {
 	if err != nil {
@@ -120,53 +184,6 @@ func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
 	w.Write(data)
 } // End respondWithJSON() func
 
-func validateChirp(w http.ResponseWriter, r *http.Request) {
-	badWords := []string {
-		"kerfuffle",
-		"sharbert",
-		"fornax",
-	}
-
-	type parameters struct {
-		Body string `json:"body"`
-	}
-
-	type returnVals struct {
-		CleanedBody string `json:"cleaned_body"`
-		Valid bool `json:"valid"`
-	}
-
-	decoder := json.NewDecoder(r.Body)
-	params := parameters{}
-	err := decoder.Decode(&params)
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Error decoding parameters", err)
-		return
-	}
-
-	// 1. Validate the length of the chirp.
-	const maxChirpLength = 140
-	if len(params.Body) > maxChirpLength {
-		respondWithError(w, http.StatusBadRequest, "Chirp is too long", nil)
-		return
-	}
-
-	// 2. Clean the chirp for any bad words.
-	words := strings.Split(params.Body, " ")
-	for _, word := range words {
-		for _, pottyWord := range badWords {
-			if strings.Contains(strings.ToLower(word), strings.ToLower(pottyWord)) {
-				params.Body = strings.ReplaceAll(params.Body, word, "****")
-			}
-		}
-	}
-
-	respondWithJSON(w, http.StatusOK, returnVals{
-		CleanedBody: params.Body,
-		Valid: true,
-	})
-} // End validateChirp() func
-
 func main() {
 	godotenv.Load()
 
@@ -197,8 +214,9 @@ func main() {
 	
 	// Method specific routing. [METHOD ][HOST]/[PATH]
 	mux.HandleFunc("GET /api/healthz", handlerReadiness)
-	mux.HandleFunc("POST /api/validate_chirp", validateChirp)
 	mux.HandleFunc("POST /api/users", apiCfg.handleCreateUser)
+	mux.HandleFunc("POST /api/chirps", apiCfg.handleCreateChirp)
+	
 	mux.HandleFunc("GET /admin/metrics", apiCfg.handlerMetrics)
 	mux.HandleFunc("POST /admin/reset", apiCfg.handlerReset)
 
