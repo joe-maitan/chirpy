@@ -153,6 +153,26 @@ func (cfg *apiConfig) handleCreateChirp(w http.ResponseWriter, r *http.Request) 
 	})
 } // End handleCreateChirp() func
 
+func (cfg *apiConfig) handleGetAllChirps(w http.ResponseWriter, r *http.Request) {
+	dbChirps, err := cfg.db.GetAllChirps(r.Context())
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error getting all chirps", err)
+	}
+
+	chirps := []Chirp{}
+	for _, c := range dbChirps {
+		chirps = append(chirps, Chirp{
+			ID: c.ID,
+			CreatedAt: c.CreatedAt,
+			UpdatedAt: c.UpdatedAt,
+			Body: c.Body,
+			UserID: c.UserID,
+		})
+	}
+
+	respondWithJSON(w, http.StatusOK, chirps)
+} // End handleCreateChirp() func
+
 func respondWithError(w http.ResponseWriter, code int, msg string, err error) {
 	if err != nil {
 		log.Println(err)
@@ -216,6 +236,7 @@ func main() {
 	mux.HandleFunc("GET /api/healthz", handlerReadiness)
 	mux.HandleFunc("POST /api/users", apiCfg.handleCreateUser)
 	mux.HandleFunc("POST /api/chirps", apiCfg.handleCreateChirp)
+	mux.HandleFunc("GET /api/chirps", apiCfg.handleGetAllChirps)
 	
 	mux.HandleFunc("GET /admin/metrics", apiCfg.handlerMetrics)
 	mux.HandleFunc("POST /admin/reset", apiCfg.handlerReset)
