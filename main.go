@@ -157,6 +157,7 @@ func (cfg *apiConfig) handleGetAllChirps(w http.ResponseWriter, r *http.Request)
 	dbChirps, err := cfg.db.GetAllChirps(r.Context())
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Error getting all chirps", err)
+		return
 	}
 
 	chirps := []Chirp{}
@@ -171,7 +172,36 @@ func (cfg *apiConfig) handleGetAllChirps(w http.ResponseWriter, r *http.Request)
 	}
 
 	respondWithJSON(w, http.StatusOK, chirps)
-} // End handleCreateChirp() func
+} // End handleGetAllChirps() func
+
+func (cfg *apiConfig) handleGetChirp(w http.ResponseWriter, r *http.Request) {
+	log.Println(r.PathValue("chirpID"))
+	chirpID := r.PathValue("chirpID")
+	if chirpID == "" {
+		respondWithError(w, http.StatusNotFound, "Invalid request", nil)
+		return
+	}
+
+	data, err := uuid.Parse(chirpID)
+	if err != nil {
+		respondWithError(w, http.StatusNotFound, "Error parsing id as a uuid", err)
+		return
+	}
+
+	chirp, err := cfg.db.GetChirp(r.Context(), data)
+	if err != nil {
+		respondWithError(w, http.StatusNotFound, "Error finding chirp", err)
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, Chirp{
+		ID: chirp.ID,
+		CreatedAt: chirp.CreatedAt,
+		UpdatedAt: chirp.UpdatedAt,
+		Body: chirp.Body,
+		UserID: chirp.UserID,
+	})
+} // End handleGetChirp() func
 
 func respondWithError(w http.ResponseWriter, code int, msg string, err error) {
 	if err != nil {
@@ -237,6 +267,7 @@ func main() {
 	mux.HandleFunc("POST /api/users", apiCfg.handleCreateUser)
 	mux.HandleFunc("POST /api/chirps", apiCfg.handleCreateChirp)
 	mux.HandleFunc("GET /api/chirps", apiCfg.handleGetAllChirps)
+	mux.HandleFunc("GET /api/chirps/{chirpID}", apiCfg.handleGetChirp)
 	
 	mux.HandleFunc("GET /admin/metrics", apiCfg.handlerMetrics)
 	mux.HandleFunc("POST /admin/reset", apiCfg.handlerReset)

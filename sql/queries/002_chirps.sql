@@ -16,5 +16,5 @@ DELETE FROM chirps RETURNING *;
 SELECT * FROM chirps ORDER BY created_at;
 
 -- name: GetChirp :one
-SELECT id, created_at, updated_at, body FROM chirps
-WHERE user_id == $1;
+SELECT id, created_at, updated_at, body, user_id FROM chirps
+WHERE id = $1;
