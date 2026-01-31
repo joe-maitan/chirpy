@@ -1,8 +1,11 @@
 package auth
 
 import (
+	"fmt"
 	"log"
 	"time"
+	"net/http"
+	"errors"
 
 	"github.com/alexedwards/argon2id"
 	"github.com/google/uuid"
@@ -36,7 +39,7 @@ func MakeJWT(userID uuid.UUID, tokenSecret string, expiresIn time.Duration) (str
 		Subject: userID.String(),
 	})
 
-	jwt, err := newToken.SignedString(tokenSecret)
+	jwt, err := newToken.SignedString([]byte(tokenSecret))
 	if err != nil {
 		return "", err
 	}
@@ -45,13 +48,53 @@ func MakeJWT(userID uuid.UUID, tokenSecret string, expiresIn time.Duration) (str
 } // End MakeJWT() func
 
 func ValidateJWT(tokenString, tokenSecret string) (uuid.UUID, error) {
-	// Correct signature: func(*jwt.Token) (interface{}, error)
 	keyFunc := func(token *jwt.Token) (interface{}, error) {
-		if err, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, err
-		}
-		return []byte("your-secret-key"), nil
+		return []byte(tokenSecret), nil
 	}
 	
-	token, err := jwt.ParseWithClaims(tokenString, jwt.RegisteredClaims{}, keyFunc)
+	token, err := jwt.ParseWithClaims(tokenString, &jwt.RegisteredClaims{}, keyFunc)
+	if err != nil {
+		return uuid.Nil, err
+	}
+
+	userIDString, err := token.Claims.GetSubject()
+	if err != nil {
+		return uuid.Nil, err
+	}
+
+	issuer, err := token.Claims.GetIssuer()
+	if err != nil {
+		return uuid.Nil, err
+	}
+	if issuer != "chirpy" {
+		return uuid.Nil, errors.New("invalid issuer")
+	}
+
+	id, err := uuid.Parse(userIDString)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("invalid user ID: %w", err)
+	}
+
+	return id, nil
 } // End ValidateJWT() func
+
+func GetBearerToken(headers http.Header) (string, error) {
+	// The outer loop iterates over the map
+	for key, values := range headers {
+		// The inner loop iterates over the slice of values for each header name
+		for _, value := range values {
+			if value.Contains("Bearer") {
+				data := strings.Split(value, " ")
+				tokenString := data[1]
+
+				if tokenString == "" || tokenString == nil {
+					return "", err
+				} else {
+					return tokenString, nil
+				}
+			}
+		}
+	}
+
+	return "", err
+} // End GetBearerToken() func

@@ -22,6 +22,7 @@ type apiConfig struct {
 	fileserverHits atomic.Int32
 	db             *database.Queries
 	platform 		string
+	jwtSecret		string
 } // End apiConfig struct
 
 type User struct {
@@ -29,6 +30,7 @@ type User struct {
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 	Email     string    `json:"email"`
+	Token	  string 	`json:"token"`
 } // End User struct
 
 type Chirp struct {
@@ -113,6 +115,7 @@ func (cfg *apiConfig) handleUserLogin(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
 		Email string `json:"email"`
 		Password string `json:"password"`
+		ExpiresIn *time.Duration `json:"expires_in_seconds"` // Optional parameter
 	}
 
 	decoder := json.NewDecoder(r.Body)
@@ -140,11 +143,23 @@ func (cfg *apiConfig) handleUserLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	expiresIn := params.ExpiresIn
+	if expiresIn != nil || expiresIn > (1 * time.Hour) {
+		expiresIn = 1 * time.Hour
+	}
+
+	token, err := MakeJWT(user.ID, cfg.jwtSecret, params.ExpiresIn)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error creating token", err)
+		return
+	}
+
 	respondWithJSON(w, http.StatusOK, User{
 		ID: user.ID,
 		CreatedAt: user.CreatedAt,
 		UpdatedAt: user.UpdatedAt,
 		Email: user.Email,
+		Token: token
 	})
 } // End handleUserLogin() func
 
@@ -153,6 +168,18 @@ func (cfg *apiConfig) handleCreateChirp(w http.ResponseWriter, r *http.Request) 
 		"kerfuffle",
 		"sharbert",
 		"fornax",
+	}
+
+	tokenString, err := GetBearerToken(r.headers)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Auth failed", err)
+		return
+	}
+
+	temp, err := ValidateJWT(tokenString, cfg.jwtSecret)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "JWT Token is not valid", err)
+		return
 	}
 
 	type parameters struct {
@@ -307,6 +334,7 @@ func main() {
 		fileserverHits: atomic.Int32{},
 		db: dbQueries,
 		platform: os.Getenv("PLATFORM"),
+		jwtSecret: os.Getenv("SECRET"),
 	}
 
 	mux := http.NewServeMux()
@@ -315,6 +343,7 @@ func main() {
 	
 	// Method specific routing. [METHOD ][HOST]/[PATH]
 	mux.HandleFunc("GET /api/healthz", handlerReadiness)
+
 	mux.HandleFunc("POST /api/users", apiCfg.handleCreateUser)
 	mux.HandleFunc("POST /api/login", apiCfg.handleUserLogin)
 	mux.HandleFunc("POST /api/chirps", apiCfg.handleCreateChirp)
