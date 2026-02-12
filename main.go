@@ -59,7 +59,7 @@ func (cfg *apiConfig) handlerReset(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusForbidden, "Forbidden", nil)
 		return
 	}
-	
+
 	cfg.db.DeleteUsers(r.Context())
 	cfg.fileserverHits.Store(0)
 	w.WriteHeader(http.StatusOK)
@@ -148,7 +148,7 @@ func (cfg *apiConfig) handleUserLogin(w http.ResponseWriter, r *http.Request) {
 		expiresIn = 1 * time.Hour
 	}
 
-	token, err := MakeJWT(user.ID, cfg.jwtSecret, params.ExpiresIn)
+	token, err := auth.MakeJWT(user.ID, cfg.jwtSecret, params.ExpiresIn)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Error creating token", err)
 		return
@@ -159,7 +159,7 @@ func (cfg *apiConfig) handleUserLogin(w http.ResponseWriter, r *http.Request) {
 		CreatedAt: user.CreatedAt,
 		UpdatedAt: user.UpdatedAt,
 		Email: user.Email,
-		Token: token
+		Token: token,
 	})
 } // End handleUserLogin() func
 
@@ -170,13 +170,13 @@ func (cfg *apiConfig) handleCreateChirp(w http.ResponseWriter, r *http.Request) 
 		"fornax",
 	}
 
-	tokenString, err := GetBearerToken(r.headers)
+	tokenString, err := auth.GetBearerToken(r.Header)
 	if err != nil {
 		respondWithError(w, http.StatusUnauthorized, "Auth failed", err)
 		return
 	}
 
-	temp, err := ValidateJWT(tokenString, cfg.jwtSecret)
+	temp, err := auth.ValidateJWT(tokenString, cfg.jwtSecret)
 	if err != nil {
 		respondWithError(w, http.StatusUnauthorized, "JWT Token is not valid", err)
 		return
@@ -189,7 +189,7 @@ func (cfg *apiConfig) handleCreateChirp(w http.ResponseWriter, r *http.Request) 
 
 	decoder := json.NewDecoder(r.Body)
 	params := parameters{}
-	err := decoder.Decode(&params)
+	err = decoder.Decode(&params)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Error decoding parameters", err)
 		return
@@ -329,7 +329,7 @@ func main() {
 	}
 
 	dbQueries := database.New(dbConn)
-	
+
 	apiCfg := apiConfig{
 		fileserverHits: atomic.Int32{},
 		db: dbQueries,
@@ -340,7 +340,7 @@ func main() {
 	mux := http.NewServeMux()
 
 	mux.Handle("/app/", apiCfg.middlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir(".")))))
-	
+
 	// Method specific routing. [METHOD ][HOST]/[PATH]
 	mux.HandleFunc("GET /api/healthz", handlerReadiness)
 
@@ -349,7 +349,7 @@ func main() {
 	mux.HandleFunc("POST /api/chirps", apiCfg.handleCreateChirp)
 	mux.HandleFunc("GET /api/chirps", apiCfg.handleGetAllChirps)
 	mux.HandleFunc("GET /api/chirps/{chirpID}", apiCfg.handleGetChirp)
-	
+
 	mux.HandleFunc("GET /admin/metrics", apiCfg.handlerMetrics)
 	mux.HandleFunc("POST /admin/reset", apiCfg.handlerReset)
 
@@ -357,10 +357,10 @@ func main() {
 	server := http.Server{
 		Handler: mux,
 		Addr: 	 "127.0.0.1:" + port,
-	} 
+	}
 
 	fmt.Printf("Server started on: %v...\n", port)
-	
+
 	/* ListenAndServe() blocks the main function until the server shuts down or an
 	unexpected error crashes it. */
 	log.Fatal(server.ListenAndServe())
