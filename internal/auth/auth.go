@@ -51,7 +51,7 @@ func ValidateJWT(tokenString, tokenSecret string) (uuid.UUID, error) {
 	keyFunc := func(token *jwt.Token) (interface{}, error) {
 		return []byte(tokenSecret), nil
 	}
-	
+
 	token, err := jwt.ParseWithClaims(tokenString, &jwt.RegisteredClaims{}, keyFunc)
 	if err != nil {
 		return uuid.Nil, err
@@ -79,22 +79,20 @@ func ValidateJWT(tokenString, tokenSecret string) (uuid.UUID, error) {
 } // End ValidateJWT() func
 
 func GetBearerToken(headers http.Header) (string, error) {
-	// The outer loop iterates over the map
-	for key, values := range headers {
-		// The inner loop iterates over the slice of values for each header name
-		for _, value := range values {
-			if value.Contains("Bearer") {
-				data := strings.Split(value, " ")
-				tokenString := data[1]
-
-				if tokenString == "" || tokenString == nil {
-					return "", err
-				} else {
-					return tokenString, nil
-				}
-			}
-		}
+	authHeader := headers.Get("Authorization")
+	if authHeader == "" {
+		return "", errors.New("authorization header missing")
 	}
 
-	return "", err
+	const prefix = "Bearer "
+	if !strings.HasPrefix(authHeader, prefix) {
+		return "", errors.New("authorization header is not a bearer token")
+	}
+
+	token := strings.TrimPrefix(authHeader, prefix)
+	if token == "" {
+		return "", errors.New("bearer token is empty")
+	}
+
+	return token, nil
 } // End GetBearerToken() func
