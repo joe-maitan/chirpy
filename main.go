@@ -54,7 +54,6 @@ func (cfg *apiConfig) handlerMetrics(w http.ResponseWriter, r *http.Request) {
 } // End handlerMetrics() func
 
 func (cfg *apiConfig) handlerReset(w http.ResponseWriter, r *http.Request) {
-
 	if cfg.platform != "dev" {
 		respondWithError(w, http.StatusForbidden, "Forbidden", nil)
 		return
@@ -144,11 +143,11 @@ func (cfg *apiConfig) handleUserLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	expiresIn := params.ExpiresIn
-	if expiresIn != nil || expiresIn > (1 * time.Hour) {
-		expiresIn = 1 * time.Hour
+	if expiresIn != nil || *expiresIn > (1 * time.Hour) {
+		*expiresIn = 1 * time.Hour
 	}
 
-	token, err := auth.MakeJWT(user.ID, cfg.jwtSecret, params.ExpiresIn)
+	token, err := auth.MakeJWT(user.ID, cfg.jwtSecret, *expiresIn)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Error creating token", err)
 		return
@@ -170,6 +169,19 @@ func (cfg *apiConfig) handleCreateChirp(w http.ResponseWriter, r *http.Request) 
 		"fornax",
 	}
 
+	type parameters struct {
+		Body string `json:"body"`
+		UserID uuid.UUID `json:"user_id"`
+	}
+
+	decoder := json.NewDecoder(r.Body)
+	params := parameters{}
+	err := decoder.Decode(&params)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error decoding parameters", err)
+		return
+	}
+
 	tokenString, err := auth.GetBearerToken(r.Header)
 	if err != nil {
 		respondWithError(w, http.StatusUnauthorized, "Auth failed", err)
@@ -182,16 +194,8 @@ func (cfg *apiConfig) handleCreateChirp(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	type parameters struct {
-		Body string `json:"body"`
-		UserID uuid.UUID `json:"user_id"`
-	}
-
-	decoder := json.NewDecoder(r.Body)
-	params := parameters{}
-	err = decoder.Decode(&params)
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Error decoding parameters", err)
+	if temp != params.UserID {
+		respondWithError(w, http.StatusBadRequest, "Token is invalid", err)
 		return
 	}
 
