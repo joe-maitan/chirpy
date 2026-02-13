@@ -142,12 +142,12 @@ func (cfg *apiConfig) handleUserLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	expiresIn := params.ExpiresIn
-	if expiresIn != nil || *expiresIn > (1 * time.Hour) {
-		*expiresIn = 1 * time.Hour
+	expiresIn := 1 * time.Hour
+	if params.ExpiresIn != nil && *params.ExpiresIn < time.Hour {
+		expiresIn = *params.ExpiresIn
 	}
 
-	token, err := auth.MakeJWT(user.ID, cfg.jwtSecret, *expiresIn)
+	token, err := auth.MakeJWT(user.ID, cfg.jwtSecret, expiresIn)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Error creating token", err)
 		return
@@ -184,18 +184,13 @@ func (cfg *apiConfig) handleCreateChirp(w http.ResponseWriter, r *http.Request) 
 
 	tokenString, err := auth.GetBearerToken(r.Header)
 	if err != nil {
-		respondWithError(w, http.StatusUnauthorized, "Auth failed", err)
+		respondWithError(w, http.StatusUnauthorized, "Missing or invalid token", err)
 		return
 	}
 
-	temp, err := auth.ValidateJWT(tokenString, cfg.jwtSecret)
+	userID, err := auth.ValidateJWT(tokenString, cfg.jwtSecret)
 	if err != nil {
 		respondWithError(w, http.StatusUnauthorized, "JWT Token is not valid", err)
-		return
-	}
-
-	if temp != params.UserID {
-		respondWithError(w, http.StatusBadRequest, "Token is invalid", err)
 		return
 	}
 
@@ -218,7 +213,7 @@ func (cfg *apiConfig) handleCreateChirp(w http.ResponseWriter, r *http.Request) 
 
 	chirp, err := cfg.db.CreateChirp(r.Context(), database.CreateChirpParams{
 		Body: params.Body,
-		UserID: params.UserID,
+		UserID: userID,
 	})
 
 	if err != nil {
