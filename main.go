@@ -31,6 +31,7 @@ type User struct {
 	UpdatedAt time.Time `json:"updated_at"`
 	Email     string    `json:"email"`
 	Token	  string 	`json:"token"`
+	RefreshToken string `json:"refresh_token"`
 } // End User struct
 
 type Chirp struct {
@@ -153,12 +154,19 @@ func (cfg *apiConfig) handleUserLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	refresh_token, err := auth.MakeRefreshToken()
+	if err != nil {
+		respondWithError(w, 500, "Error making refresh token", err)
+		return
+	}
+
 	respondWithJSON(w, http.StatusOK, User{
 		ID: user.ID,
 		CreatedAt: user.CreatedAt,
 		UpdatedAt: user.UpdatedAt,
 		Email: user.Email,
 		Token: token,
+		RefreshToken: refresh_token,
 	})
 } // End handleUserLogin() func
 
