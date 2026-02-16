@@ -1,9 +1,10 @@
 package auth
 
 import (
-	"time"
-	"testing"
+	"fmt"
 	"net/http"
+	"testing"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -133,7 +134,7 @@ func TestValidGetBearerToken(t *testing.T) {
 		t.Errorf("GetBearerToken() error = %v", err)
 	}
 
-	fetchedUserID, err, := ValidateJWT(data, "secret")
+	fetchedUserID, err := ValidateJWT(data, "secret")
 	if err != nil {
 		t.Errorf("ValidateJWT() error = %v", err)
 	}
@@ -142,3 +143,15 @@ func TestValidGetBearerToken(t *testing.T) {
 		t.Errorf("userID and fetchedUserID are NOT equal.\n")
 	}
 } // End TestGetBearerToken() func
+
+func TestMakeRefreshToken(t *testing.T) {
+	refreshToken, err := MakeRefreshToken()
+
+	if err != nil {
+		t.Errorf("TestMakeRefreshToken() error = %v.\n", err)
+	}
+
+	if refreshToken == "" {
+		t.Errorf("TestMakeRefreshToken() - refreshToken var is empty.\n")
+	}
+} // End TestMakeRefreshToken
