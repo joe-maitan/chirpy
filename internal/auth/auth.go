@@ -101,14 +101,12 @@ func GetBearerToken(headers http.Header) (string, error) {
 } // End GetBearerToken() func
 
 func MakeRefreshToken() (string, error) {
-	var refreshToken []byte
+	byteArr := make([]byte, 32)
 
-	_, err := rand.Read(refreshToken)
+	_, err := rand.Read(byteArr)
 	if err != nil {
 		return "", err
 	}
 
-	encodedString := hex.EncodeToString(refreshToken)
-
-	return encodedString, nil
+	return hex.EncodeToString(byteArr), nil
 } // End MakeRefreshToken() func
