@@ -31,6 +31,7 @@ type User struct {
 	UpdatedAt time.Time `json:"updated_at"`
 	Email     string    `json:"email"`
 	Token	  string 	`json:"token"`
+	RefreshToken string `json:"refresh_token"`
 } // End User struct
 
 type Chirp struct {
@@ -54,7 +55,6 @@ func (cfg *apiConfig) handlerMetrics(w http.ResponseWriter, r *http.Request) {
 } // End handlerMetrics() func
 
 func (cfg *apiConfig) handlerReset(w http.ResponseWriter, r *http.Request) {
-
 	if cfg.platform != "dev" {
 		respondWithError(w, http.StatusForbidden, "Forbidden", nil)
 		return
@@ -143,14 +143,20 @@ func (cfg *apiConfig) handleUserLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	expiresIn := params.ExpiresIn
-	if expiresIn != nil || expiresIn > (1 * time.Hour) {
-		expiresIn = 1 * time.Hour
+	expiresIn := 1 * time.Hour
+	if params.ExpiresIn != nil && *params.ExpiresIn < time.Hour {
+		expiresIn = *params.ExpiresIn
 	}
 
-	token, err := auth.MakeJWT(user.ID, cfg.jwtSecret, params.ExpiresIn)
+	token, err := auth.MakeJWT(user.ID, cfg.jwtSecret, expiresIn)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Error creating token", err)
+		return
+	}
+
+	refresh_token, err := auth.MakeRefreshToken()
+	if err != nil {
+		respondWithError(w, 500, "Error making refresh token", err)
 		return
 	}
 
@@ -160,6 +166,7 @@ func (cfg *apiConfig) handleUserLogin(w http.ResponseWriter, r *http.Request) {
 		UpdatedAt: user.UpdatedAt,
 		Email: user.Email,
 		Token: token,
+		RefreshToken: refresh_token,
 	})
 } // End handleUserLogin() func
 
@@ -170,18 +177,6 @@ func (cfg *apiConfig) handleCreateChirp(w http.ResponseWriter, r *http.Request) 
 		"fornax",
 	}
 
-	tokenString, err := auth.GetBearerToken(r.Header)
-	if err != nil {
-		respondWithError(w, http.StatusUnauthorized, "Auth failed", err)
-		return
-	}
-
-	temp, err := auth.ValidateJWT(tokenString, cfg.jwtSecret)
-	if err != nil {
-		respondWithError(w, http.StatusUnauthorized, "JWT Token is not valid", err)
-		return
-	}
-
 	type parameters struct {
 		Body string `json:"body"`
 		UserID uuid.UUID `json:"user_id"`
@@ -189,9 +184,21 @@ func (cfg *apiConfig) handleCreateChirp(w http.ResponseWriter, r *http.Request) 
 
 	decoder := json.NewDecoder(r.Body)
 	params := parameters{}
-	err = decoder.Decode(&params)
+	err := decoder.Decode(&params)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Error decoding parameters", err)
+		return
+	}
+
+	tokenString, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Missing or invalid token", err)
+		return
+	}
+
+	userID, err := auth.ValidateJWT(tokenString, cfg.jwtSecret)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "JWT Token is not valid", err)
 		return
 	}
 
@@ -214,7 +221,7 @@ func (cfg *apiConfig) handleCreateChirp(w http.ResponseWriter, r *http.Request) 
 
 	chirp, err := cfg.db.CreateChirp(r.Context(), database.CreateChirpParams{
 		Body: params.Body,
-		UserID: params.UserID,
+		UserID: userID,
 	})
 
 	if err != nil {
