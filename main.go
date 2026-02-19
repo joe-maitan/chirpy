@@ -363,7 +363,7 @@ func main() {
 	/* A http.Server is a struct that describes a server configuration */
 	server := http.Server{
 		Handler: mux,
-		Addr: 	 "127.0.0.1:" + port,
+		Addr: 	 ":" + port,
 	}
 
 	fmt.Printf("Server started on: %v...\n", port)

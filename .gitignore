@@ -16,3 +16,4 @@ go.work.sum
 
 .env
 chirpy
+secrets.txt
