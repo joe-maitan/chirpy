@@ -10,7 +10,6 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
-	"errors"
 
 	"github.com/google/uuid"
 	"github.com/joe-maitan/chirpy/internal/database"
@@ -349,21 +348,21 @@ func (cfg *apiConfig) checkRefreshToken(w http.ResponseWriter, r *http.Request) 
 
 	token := strings.TrimPrefix(authHeader, prefix)
 	if token == "" {
-		respondWithError(w, 401, errors.New("bearer token is empty"))
+		respondWithError(w, 401, "bearer token is empty", nil)
 		return
 	}
 
 	fetchedRefreshToken, err := cfg.db.GetRefreshToken(r.Context(), token)
 	if err != nil {
-		respondWithError(w, 401, errors.New("token did not exist"))
+		respondWithError(w, 401, "token did not exist", nil)
 	}
 
 	// if the token expires now revoke it.
-	if fetchedRefreshToken.ExpiresAt == time.Now() {
+	if fetchedRefreshToken.ExpiresAt.Equal(time.Now()) {
 		cfg.revokeRefreshToken(w, r)
 	}
 
-	if fetchedRefreshToken.RevokedAt != nil {
+	if fetchedRefreshToken.RevokedAt.Valid {
 		respondWithError(w, 401, "refresh token has been revoked.", nil)
 	}
 
