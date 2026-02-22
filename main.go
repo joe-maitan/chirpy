@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+	"errors"
 
 	"github.com/google/uuid"
 	"github.com/joe-maitan/chirpy/internal/database"
@@ -40,6 +41,15 @@ type Chirp struct {
 	UpdatedAt time.Time `json:"updated_at"`
 	Body	  string 	`json:"body"`
 	UserID    uuid.UUID `json:"user_id"`
+}
+
+type RefreshToken struct {
+	Token	  string
+	UserID 	  uuid.UUID
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	ExpiresAt time.Time
+	RevokedAt time.Time
 }
 
 func handlerReadiness(w http.ResponseWriter, r *http.Request) {
@@ -159,6 +169,12 @@ func (cfg *apiConfig) handleUserLogin(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, 500, "Error making refresh token", err)
 		return
 	}
+
+	cfg.db.CreateRefreshToken(r.Context(), database.CreateRefreshTokenParams{
+		Token: refresh_token,
+		UserID: user.ID,
+		ExpiresAt: time.Now().AddDate(0, 0, 60),
+	})
 
 	respondWithJSON(w, http.StatusOK, User{
 		ID: user.ID,
@@ -319,6 +335,44 @@ func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
 	w.Write(data)
 } // End respondWithJSON() func
 
+func (cfg *apiConfig) checkRefreshToken(w http.ResponseWriter, r *http.Request) {
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		respondWithError(w, 401, "authorization header missing", nil)
+		return
+	}
+
+	const prefix = "Bearer "
+	if !strings.HasPrefix(authHeader, prefix) {
+		respondWithError(w, 401, "authorization header is not a bearer token", nil)
+	}
+
+	token := strings.TrimPrefix(authHeader, prefix)
+	if token == "" {
+		respondWithError(w, 401, errors.New("bearer token is empty"))
+		return
+	}
+
+	fetchedRefreshToken, err := cfg.db.GetRefreshToken(r.Context(), token)
+	if err != nil {
+		respondWithError(w, 401, errors.New("token did not exist"))
+	}
+
+	// if the token expires now revoke it.
+	if fetchedRefreshToken.ExpiresAt == time.Now() {
+		cfg.revokeRefreshToken(w, r)
+	}
+
+	if fetchedRefreshToken.RevokedAt != nil {
+		respondWithError(w, 401, "refresh token has been revoked.", nil)
+	}
+
+} // End checkRefreshToken() func
+
+func (cfg *apiConfig) revokeRefreshToken(w http.ResponseWriter, r *http.Request) {
+
+} // End revokeRefreshToken() func
+
 func main() {
 	godotenv.Load()
 
@@ -354,6 +408,8 @@ func main() {
 	mux.HandleFunc("POST /api/users", apiCfg.handleCreateUser)
 	mux.HandleFunc("POST /api/login", apiCfg.handleUserLogin)
 	mux.HandleFunc("POST /api/chirps", apiCfg.handleCreateChirp)
+	mux.HandleFunc("POST /api/refresh", apiCfg.checkRefreshToken)
+	mux.HandleFunc("POST /api/revoke", apiCfg.revokeRefreshToken)
 	mux.HandleFunc("GET /api/chirps", apiCfg.handleGetAllChirps)
 	mux.HandleFunc("GET /api/chirps/{chirpID}", apiCfg.handleGetChirp)
 
