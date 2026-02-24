@@ -14,12 +14,6 @@ import (
 	_ "github.com/lib/pq"
 )
 
-func handlerReadiness(w http.ResponseWriter, r *http.Request) {
-	w.Header().Add("Content-Type", "text/plain; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(http.StatusText(http.StatusOK)))
-} // End handlerReadiness() func
-
 func main() {
 	godotenv.Load()
 
@@ -50,7 +44,8 @@ func main() {
 	mux.Handle("/app/", apiCfg.MiddlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir(".")))))
 
 	// Method specific routing. [METHOD ][HOST]/[PATH]
-	mux.HandleFunc("GET  /api/healthz", handlerReadiness)
+	// Basic health check
+	mux.HandleFunc("GET  /api/healthz", apiCfg.HandlerReadiness)
 
 	// Creates a new user
 	mux.HandleFunc("POST /api/users", apiCfg.HandleCreateUser)
