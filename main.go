@@ -59,6 +59,7 @@ func main() {
 	mux.HandleFunc("POST /api/chirps", apiCfg.HandleCreateChirp)
 	mux.HandleFunc("GET  /api/chirps", apiCfg.HandleGetAllChirps)
 	mux.HandleFunc("GET  /api/chirps/{chirpID}", apiCfg.HandleGetChirp)
+	mux.HandleFunc("DELETE /api/chirps/{chirpID}", apiCfg.HandleDeleteChirp)
 
 	// Handles refresh token rotation and revocation
 	mux.HandleFunc("POST /api/refresh", apiCfg.CheckRefreshToken)
