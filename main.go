@@ -37,6 +37,7 @@ func main() {
 		DB:             dbQueries,
 		Platform:       os.Getenv("PLATFORM"),
 		JWTSecret:      os.Getenv("SECRET"),
+		PolkaAPIKey: os.Getenv("POLKA_API_KEY"),
 	}
 
 	mux := http.NewServeMux()
@@ -68,6 +69,9 @@ func main() {
 	// Admin routes
 	mux.HandleFunc("GET  /admin/metrics", apiCfg.HandlerMetrics)
 	mux.HandleFunc("POST /admin/reset", apiCfg.HandlerReset)
+
+	mux.HandleFunc("POST /api/polka/webhooks", apiCfg.HandlePolkaWebhook)
+
 
 	/* A http.Server is a struct that describes a server configuration */
 	server := http.Server{

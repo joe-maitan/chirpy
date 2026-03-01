@@ -19,6 +19,7 @@ type Config struct {
 	DB             *database.Queries // DB driver
 	Platform       string            // platform the api is running on (e.g. "DEV", "PROD")
 	JWTSecret      string            // secret key for signing JWT tokens
+	PolkaAPIKey	   string            // secret key for validating Polka webhooks
 } // End api config struct
 
 type User struct {
@@ -26,8 +27,9 @@ type User struct {
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 	Email        string    `json:"email"`
-	Token        string    `json:"token"`
-	RefreshToken string    `json:"refresh_token"`
+	// Token        string    `json:"token"`
+	// RefreshToken string    `json:"refresh_token"`
+	IsChirpyRed    bool		`json:"is_chirpy_red"`
 } // End User struct
 
 type Chirp struct {
@@ -138,6 +140,7 @@ func (cfg *Config) HandleCreateUser(w http.ResponseWriter, r *http.Request) {
 		CreatedAt: user.CreatedAt,
 		UpdatedAt: user.UpdatedAt,
 		Email:     user.Email,
+		IsChirpyRed: user.IsChirpyRed,
 	})
 } // End HandleCreateUser() func
 
@@ -210,6 +213,7 @@ func (cfg *Config) HandleUserLogin(w http.ResponseWriter, r *http.Request) {
 			CreatedAt: user.CreatedAt,
 			UpdatedAt: user.UpdatedAt,
 			Email:     user.Email,
+			IsChirpyRed: user.IsChirpyRed,
 		},
 		Token:        accessToken,
 		RefreshToken: refreshToken,
@@ -227,6 +231,7 @@ func (cfg *Config) HandleUpdateUser(w http.ResponseWriter, r *http.Request) {
 		Email string `json:"email"`
 		CreatedAt time.Time `json:"created_at"`
 		UpdatedAt time.Time `json:"updated_at"`
+		IsChirpyRed bool `json:"is_chirpy_red"`
 	}
 
 	token, err := auth.GetBearerToken(r.Header)
@@ -275,6 +280,7 @@ func (cfg *Config) HandleUpdateUser(w http.ResponseWriter, r *http.Request) {
 		CreatedAt: user.CreatedAt,
 		UpdatedAt: user.UpdatedAt,
 		Email: user.Email,
+		IsChirpyRed: user.IsChirpyRed,
 	})
 } // End HandleUpdateUser() func
 
@@ -502,3 +508,73 @@ func (cfg *Config) RevokeRefreshToken(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusNoContent)
 } // End RevokeRefreshToken() func
+
+func (cfg *Config) HandlePolkaWebhook(w http.ResponseWriter, r *http.Request) {
+	type EventData struct {
+		UserID string `json:"user_id"`
+	}
+
+	type parameters struct {
+		Event string `json:"event"`
+		Data  EventData `json:"data"`
+	}
+
+	fetchedKey, err := auth.GetAPIKey(r.Header)
+	if err != nil {
+		log.Printf("api.go - HandlePolkaWebhook() - Error trying to get API key from header: %v", err)
+		RespondWithError(w, 401, "Missing API key", err)
+		return
+	}
+
+	if fetchedKey != cfg.PolkaAPIKey {
+		log.Printf("api.go - HandlePolkaWebhook() - Invalid API key: %s", fetchedKey)
+		RespondWithError(w, 401, "Invalid API key", nil)
+		return
+	}
+
+	decoder := json.NewDecoder(r.Body)
+	params := parameters{}
+	err = decoder.Decode(&params)
+	if err != nil {
+		log.Printf("api.go - HandleUpdateUser() - Error decoding parameters: %v", err)
+		RespondWithError(w, http.StatusUnauthorized, "Error decoding parameters", err)
+		return
+	}
+
+	log.Printf("Received Polka webhook - Event: %s, Data: %s", params.Event, params.Data)
+
+	if params.Event != "user.upgraded" {
+		w.WriteHeader(204)
+		w.Write([]byte("Webhook received but no action taken"))
+	}
+
+	userID, err := uuid.Parse(params.Data.UserID)
+	if err != nil {
+		log.Printf("api.go - HandlePolkaWebhook() - Error parsing user ID: %v", err)
+		RespondWithError(w, 400, "Invalid user ID format", err)
+		return
+	}
+
+	fetchedUser, err := cfg.DB.GetUserByID(r.Context(), userID)
+	if err != nil {
+		log.Printf("api.go - HandlePolkaWebhook() - Error fetching user by ID: %v", err)
+		RespondWithError(w, 404, "Error fetching user", err)
+		return
+	}
+
+	if fetchedUser.ID != userID {
+		log.Printf("api.go - HandlePolkaWebhook() - User ID mismatch: expected %s, got %s", userID, fetchedUser.ID)
+		RespondWithError(w, 500, "User ID mismatch", nil)
+		return
+	}
+
+	_, err = cfg.DB.UpgradeUserToChirpyRed(r.Context(), userID)
+	if err != nil {
+		log.Printf("api.go - HandlePolkaWebhook() - Error upgrading user to Chirpy Red: %v", err)
+		RespondWithError(w, 500, "Error upgrading user to Chirpy Red", err)
+		return
+	}
+
+	w.WriteHeader(204)
+	w.Write([]byte("User upgraded to Chirpy Red successfully"))
+} // End HandlePolkaWebhook() func
