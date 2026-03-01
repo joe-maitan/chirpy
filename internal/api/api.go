@@ -217,7 +217,7 @@ func (cfg *Config) HandleUserLogin(w http.ResponseWriter, r *http.Request) {
 } // End HandleUserLogin() func
 
 func (cfg *Config) HandleUpdateUser(w http.ResponseWriter, r *http.Request) {
-	
+
 } // End HandleUpdateUser() func
 
 func (cfg *Config) HandleCreateChirp(w http.ResponseWriter, r *http.Request) {

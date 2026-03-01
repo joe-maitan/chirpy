@@ -41,6 +41,7 @@ func main() {
 
 	mux := http.NewServeMux()
 
+	// TODO: Add middleware for logging and rate limiting as needed.
 	mux.Handle("/app/", apiCfg.MiddlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir(".")))))
 
 	// Method specific routing. [METHOD ][HOST]/[PATH]
