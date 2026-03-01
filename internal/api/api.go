@@ -217,7 +217,65 @@ func (cfg *Config) HandleUserLogin(w http.ResponseWriter, r *http.Request) {
 } // End HandleUserLogin() func
 
 func (cfg *Config) HandleUpdateUser(w http.ResponseWriter, r *http.Request) {
+	type parameters struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
 
+	type Response struct {
+		ID	uuid.UUID `json:"id"`
+		Email string `json:"email"`
+		CreatedAt time.Time `json:"created_at"`
+		UpdatedAt time.Time `json:"updated_at"`
+	}
+
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		RespondWithError(w, http.StatusUnauthorized, "Missing authentication token", err)
+		return
+	}
+
+	userID, err := auth.ValidateJWT(token, cfg.JWTSecret)
+	if err != nil {
+		log.Printf("api.go - HandleUpdateUser() - Error trying to call auth.ValidateJWT: %v", err)
+		RespondWithError(w, http.StatusUnauthorized, "Could not validate JWT", err)
+		return
+	}
+
+	decoder := json.NewDecoder(r.Body)
+	params := parameters{}
+	err = decoder.Decode(&params)
+	if err != nil {
+		log.Printf("api.go - HandleUpdateUser() - Error decoding parameters: %v", err)
+		RespondWithError(w, http.StatusUnauthorized, "Error decoding parameters", err)
+		return
+	}
+
+	hashedPassword, err := auth.HashPassword(params.Password)
+	if err != nil {
+		log.Printf("api.go - HandleUpdateUser() - Error hashing password: %v", err)
+		RespondWithError(w, http.StatusInternalServerError, "Error hashing password", err)
+		return
+	}
+
+	user, err := cfg.DB.UpdateUserPassword(r.Context(), database.UpdateUserPasswordParams{
+		ID:             userID,
+		Email:          params.Email,
+		HashedPassword: hashedPassword,
+	})
+
+	if err != nil {
+		log.Printf("api.go - HandleUpdateUser() - Error updating user: %v", err)
+		RespondWithError(w, http.StatusInternalServerError, "Error updating user", err)
+		return
+	}
+
+	RespondWithJSON(w, http.StatusOK, Response{
+		ID: user.ID,
+		CreatedAt: user.CreatedAt,
+		UpdatedAt: user.UpdatedAt,
+		Email: user.Email,
+	})
 } // End HandleUpdateUser() func
 
 func (cfg *Config) HandleCreateChirp(w http.ResponseWriter, r *http.Request) {
@@ -228,7 +286,7 @@ func (cfg *Config) HandleCreateChirp(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type parameters struct {
-		Body   string    `json:"body"`
+		Body string `json:"body"`
 		// UserID uuid.UUID `json:"user_id"`
 	}
 
@@ -341,6 +399,56 @@ func (cfg *Config) HandleGetChirp(w http.ResponseWriter, r *http.Request) {
 		UserID:    chirp.UserID,
 	})
 } // End HandleGetChirp() func
+
+func (cfg *Config) HandleDeleteChirp(w http.ResponseWriter, r *http.Request) {
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		RespondWithError(w, http.StatusUnauthorized, "Missing authentication token", err)
+		return
+	}
+
+	userID, err := auth.ValidateJWT(token, cfg.JWTSecret)
+	if err != nil {
+		log.Printf("api.go - HandleUpdateUser() - Error trying to call auth.ValidateJWT: %v", err)
+		RespondWithError(w, http.StatusUnauthorized, "Could not validate JWT", err)
+		return
+	}
+
+	chirpID := r.PathValue("chirpID")
+	if chirpID == "" {
+		RespondWithError(w, http.StatusNotFound, "Invalid chirp ID", nil)
+		return
+	}
+
+	data, err := uuid.Parse(chirpID)
+	if err != nil {
+		RespondWithError(w, http.StatusNotFound, "Error parsing id as a uuid", err)
+		return
+	}
+
+	chirp, err := cfg.DB.GetChirp(r.Context(), data)
+	if err != nil {
+		RespondWithError(w, http.StatusNotFound, "Error finding chirp", err)
+		return
+	}
+
+	if chirp.UserID != userID {
+		RespondWithError(w, http.StatusForbidden, "You don't have permission to delete this chirp", nil)
+		return
+	}
+
+	err = cfg.DB.DeleteChirp(r.Context(), database.DeleteChirpParams{
+		ID: chirp.ID,
+		UserID: userID,
+	})
+	if err != nil {
+		log.Printf("api.go - HandleDeleteChirp() - Error deleting chirp: %v", err)
+		RespondWithError(w, http.StatusInternalServerError, "Error deleting chirp", err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+} // End HandleDeleteChirp() func
 
 func (cfg *Config) CheckRefreshToken(w http.ResponseWriter, r *http.Request) {
 	type response struct {
