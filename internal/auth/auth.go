@@ -114,3 +114,21 @@ func MakeRefreshToken() (string, error) {
 	rand.Read(byteArr)
 	return hex.EncodeToString(byteArr), nil
 } // End MakeRefreshToken() func
+
+func GetAPIKey(headers http.Header) (string, error) {
+	authHeader := headers.Get("Authorization")
+
+	if authHeader == "" {
+		log.Printf("auth.go - GetAPIKey() - No Authorization header included in request")
+		return "", errors.New("no auth header included in request")
+	}
+
+	splitAuth := strings.Split(authHeader, " ")
+	if len(splitAuth) < 2 || splitAuth[0] != "ApiKey" {
+		log.Printf("auth.go - GetAPIKey() - Malformed Authorization header: %s", authHeader)
+		return "", errors.New("malformed authorization header")
+	}
+
+	log.Printf("auth.go - GetAPIKey() - Successfully retrieved Apikey token from header: %s", splitAuth[1])
+	return splitAuth[1], nil
+} // End GetAPIKey() func

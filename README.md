@@ -109,3 +109,7 @@ Using PostgreSQL I hosted the database that stored user account information and 
 Used JWTs and refresh tokens for user authentciation. The JWTs were to authenticate the user making the requests to the API and the refresh tokens allowed the user to stay logged in for longer periods of time than a single session.
 
 ### Authorization
+Through the use of the JWTs and refresh tokens we can know authorize a user to do certain things if they are trying to either update their email or password. Or if they would like to delete a chirpy they posted.
+
+## Webhooks
+A webhook is an event that is sent to your server by an external service when  something happens. 
