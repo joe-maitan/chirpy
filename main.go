@@ -49,6 +49,7 @@ func main() {
 
 	// Creates a new user
 	mux.HandleFunc("POST /api/users", apiCfg.HandleCreateUser)
+	mux.HandleFunc("PUT /api/users", apiCfg.HandleUpdateUser)
 
 	// Handles a user login
 	mux.HandleFunc("POST /api/login", apiCfg.HandleUserLogin)

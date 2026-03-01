@@ -71,8 +71,8 @@ func RespondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
 
 func (cfg *Config) HandlerReadiness(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-Type", "text/plain; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(http.StatusText(http.StatusOK)))
+	w.WriteHeader(200)
+	w.Write([]byte(http.StatusText(200)))
 } // End HandlerReadiness() func
 
 func (cfg *Config) HandlerMetrics(w http.ResponseWriter, r *http.Request) {
@@ -110,12 +110,14 @@ func (cfg *Config) HandleCreateUser(w http.ResponseWriter, r *http.Request) {
 	params := parameters{}
 	err := decoder.Decode(&params)
 	if err != nil {
+		log.Printf("api.go - HandleCreateUser() - Error decoding parameters: %v", err)
 		RespondWithError(w, http.StatusInternalServerError, "Error decoding parameters", err)
 		return
 	}
 
 	hashedPassword, err := auth.HashPassword(params.Password)
 	if err != nil {
+		log.Printf("api.go - HandleCreateUser() - Error hashing password: %v", err)
 		RespondWithError(w, http.StatusInternalServerError, "Error hashing password", err)
 		return
 	}
@@ -126,6 +128,7 @@ func (cfg *Config) HandleCreateUser(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if err != nil {
+		log.Printf("api.go - HandleCreateUser() - Error creating user: %v", err)
 		RespondWithError(w, http.StatusInternalServerError, "Error creating user", err)
 		return
 	}
@@ -140,68 +143,82 @@ func (cfg *Config) HandleCreateUser(w http.ResponseWriter, r *http.Request) {
 
 func (cfg *Config) HandleUserLogin(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
-		Email     string         `json:"email"`
-		Password  string         `json:"password"`
-		ExpiresIn *time.Duration `json:"expires_in_seconds"` // Optional parameter
+		Password string `json:"password"`
+		Email    string `json:"email"`
+	}
+	type response struct {
+		User
+		Token        string `json:"token"`
+		RefreshToken string `json:"refresh_token"`
 	}
 
 	decoder := json.NewDecoder(r.Body)
 	params := parameters{}
 	err := decoder.Decode(&params)
 	if err != nil {
-		RespondWithError(w, http.StatusInternalServerError, "Error decoding parameters", err)
+		log.Printf("api.go - HandleUserLogin() - Error decoding parameters: %v", err)
+		RespondWithError(w, http.StatusInternalServerError, "Couldn't decode parameters", err)
 		return
 	}
 
 	user, err := cfg.DB.GetUserByEmail(r.Context(), params.Email)
 	if err != nil {
+		log.Printf("api.go - HandleUserLogin() - Error getting user by email: %v", err)
 		RespondWithError(w, http.StatusUnauthorized, "Incorrect email or password", err)
 		return
 	}
 
-	passwordMatch, err := auth.CheckPasswordHash(params.Password, user.HashedPassword)
-	if err != nil {
+	match, err := auth.CheckPasswordHash(params.Password, user.HashedPassword)
+	if err != nil || !match {
+		log.Printf("api.go - HandleUserLogin() - Error checking password hash: %v", err)
 		RespondWithError(w, http.StatusUnauthorized, "Incorrect email or password", err)
 		return
 	}
 
-	if passwordMatch == false {
-		RespondWithError(w, http.StatusUnauthorized, "Incorrect email or password", err)
-		return
-	}
-
-	expiresIn := 1 * time.Hour
-	if params.ExpiresIn != nil && *params.ExpiresIn < time.Hour {
-		expiresIn = *params.ExpiresIn
-	}
-
-	token, err := auth.MakeJWT(user.ID, cfg.JWTSecret, expiresIn)
+	accessToken, err := auth.MakeJWT(
+		user.ID,
+		cfg.JWTSecret,
+		time.Hour,
+	)
 	if err != nil {
-		RespondWithError(w, http.StatusInternalServerError, "Error creating token", err)
+		log.Printf("api.go - HandleUserLogin() - Error creating access JWT: %v", err)
+		RespondWithError(w, http.StatusInternalServerError, "Couldn't create access JWT", err)
 		return
 	}
 
-	refresh_token, err := auth.MakeRefreshToken()
+	refreshToken, err := auth.MakeRefreshToken()
 	if err != nil {
-		RespondWithError(w, 500, "Error making refresh token", err)
+		log.Printf("api.go - HandleUserLogin() - Error creating refresh token: %v", err)
+		RespondWithError(w, http.StatusInternalServerError, "Couldn't create refresh token", err)
 		return
 	}
 
-	cfg.DB.CreateRefreshToken(r.Context(), database.CreateRefreshTokenParams{
-		Token:     refresh_token,
+	_, err = cfg.DB.CreateRefreshToken(r.Context(), database.CreateRefreshTokenParams{
 		UserID:    user.ID,
-		ExpiresAt: time.Now().AddDate(0, 0, 60),
+		Token:     refreshToken,
+		ExpiresAt: time.Now().UTC().Add(time.Hour * 24 * 60),
 	})
+	if err != nil {
+		log.Printf("api.go - HandleUserLogin() - Error saving refresh token: %v", err)
+		RespondWithError(w, http.StatusInternalServerError, "Couldn't save refresh token", err)
+		return
+	}
 
-	RespondWithJSON(w, http.StatusOK, User{
-		ID:           user.ID,
-		CreatedAt:    user.CreatedAt,
-		UpdatedAt:    user.UpdatedAt,
-		Email:        user.Email,
-		Token:        token,
-		RefreshToken: refresh_token,
+	RespondWithJSON(w, http.StatusOK, response{
+		User: User{
+			ID:        user.ID,
+			CreatedAt: user.CreatedAt,
+			UpdatedAt: user.UpdatedAt,
+			Email:     user.Email,
+		},
+		Token:        accessToken,
+		RefreshToken: refreshToken,
 	})
 } // End HandleUserLogin() func
+
+func (cfg *Config) HandleUpdateUser(w http.ResponseWriter, r *http.Request) {
+	
+} // End HandleUpdateUser() func
 
 func (cfg *Config) HandleCreateChirp(w http.ResponseWriter, r *http.Request) {
 	badWords := []string{
@@ -212,26 +229,28 @@ func (cfg *Config) HandleCreateChirp(w http.ResponseWriter, r *http.Request) {
 
 	type parameters struct {
 		Body   string    `json:"body"`
-		UserID uuid.UUID `json:"user_id"`
+		// UserID uuid.UUID `json:"user_id"`
+	}
+
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		RespondWithError(w, http.StatusUnauthorized, "Missing JWT", err)
+		return
+	}
+
+	userID, err := auth.ValidateJWT(token, cfg.JWTSecret)
+	if err != nil {
+		log.Printf("api.go - HandleCreateChirp() - Error trying to call auth.ValidateJWT: %v", err)
+		RespondWithError(w, http.StatusUnauthorized, "Could not validate JWT", err)
+		return
 	}
 
 	decoder := json.NewDecoder(r.Body)
 	params := parameters{}
-	err := decoder.Decode(&params)
+	err = decoder.Decode(&params)
 	if err != nil {
+		log.Printf("api.go - HandleCreateChirp() - Error decoding parameters: %v", err)
 		RespondWithError(w, http.StatusInternalServerError, "Error decoding parameters", err)
-		return
-	}
-
-	tokenString, err := auth.GetBearerToken(r.Header)
-	if err != nil {
-		RespondWithError(w, http.StatusUnauthorized, "Missing or invalid token", err)
-		return
-	}
-
-	userID, err := auth.ValidateJWT(tokenString, cfg.JWTSecret)
-	if err != nil {
-		RespondWithError(w, http.StatusUnauthorized, "JWT Token is not valid", err)
 		return
 	}
 
@@ -258,6 +277,7 @@ func (cfg *Config) HandleCreateChirp(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if err != nil {
+		log.Printf("api.go - HandleCreateChirp() - Error creating chirp: %v", err)
 		RespondWithError(w, http.StatusInternalServerError, "Error creating chirp", err)
 		return
 	}
@@ -274,6 +294,7 @@ func (cfg *Config) HandleCreateChirp(w http.ResponseWriter, r *http.Request) {
 func (cfg *Config) HandleGetAllChirps(w http.ResponseWriter, r *http.Request) {
 	DBChirps, err := cfg.DB.GetAllChirps(r.Context())
 	if err != nil {
+		log.Printf("api.go - HandleGetAllChirps() - Error getting all chirps: %v", err)
 		RespondWithError(w, http.StatusInternalServerError, "Error getting all chirps", err)
 		return
 	}
@@ -296,7 +317,7 @@ func (cfg *Config) HandleGetChirp(w http.ResponseWriter, r *http.Request) {
 	log.Println(r.PathValue("chirpID"))
 	chirpID := r.PathValue("chirpID")
 	if chirpID == "" {
-		RespondWithError(w, http.StatusNotFound, "Invalid request", nil)
+		RespondWithError(w, http.StatusNotFound, "Invalid chirp ID", nil)
 		return
 	}
 
@@ -322,39 +343,54 @@ func (cfg *Config) HandleGetChirp(w http.ResponseWriter, r *http.Request) {
 } // End HandleGetChirp() func
 
 func (cfg *Config) CheckRefreshToken(w http.ResponseWriter, r *http.Request) {
-	authHeader := r.Header.Get("Authorization")
-	if authHeader == "" {
-		RespondWithError(w, 401, "authorization header missing", nil)
-		return
+	type response struct {
+		Token string `json:"token"`
 	}
 
-	const prefix = "Bearer "
-	if !strings.HasPrefix(authHeader, prefix) {
-		RespondWithError(w, 401, "authorization header is not a bearer token", nil)
-	}
-
-	token := strings.TrimPrefix(authHeader, prefix)
-	if token == "" {
-		RespondWithError(w, 401, "bearer token is empty", nil)
-		return
-	}
-
-	fetchedRefreshToken, err := cfg.DB.GetRefreshToken(r.Context(), token)
+	refreshToken, err := auth.GetBearerToken(r.Header)
 	if err != nil {
-		RespondWithError(w, 401, "token did not exist", nil)
+		RespondWithError(w, http.StatusUnauthorized, "Could not find token", err)
+		return
 	}
 
-	// if the token expires now revoke it.
-	if fetchedRefreshToken.ExpiresAt.Equal(time.Now()) {
-		cfg.RevokeRefreshToken(w, r)
+	user, err := cfg.DB.GetUserFromRefreshToken(r.Context(), refreshToken)
+	if err != nil {
+		log.Printf("api.go - CheckRefreshToken() - Error trying to get user from refresh token: %v", err)
+		RespondWithError(w, http.StatusUnauthorized, "Could not get user from refresh token", err)
+		return
 	}
 
-	if fetchedRefreshToken.RevokedAt.Valid {
-		RespondWithError(w, 401, "refresh token has been revoked.", nil)
+	accessToken, err := auth.MakeJWT(
+		user.ID,
+		cfg.JWTSecret,
+		time.Hour,
+	)
+
+	if err != nil {
+		log.Printf("api.go - CheckRefreshToken() - Error trying to create access JWT: %v", err)
+		RespondWithError(w, http.StatusInternalServerError, "Couldn't validate token", err)
+		return
 	}
 
+	RespondWithJSON(w, http.StatusOK, response{
+		Token: accessToken,
+	})
 } // End CheckRefreshToken() func
 
 func (cfg *Config) RevokeRefreshToken(w http.ResponseWriter, r *http.Request) {
+	refreshToken, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		log.Printf("api.go - RevokeRefreshToken() - Error trying to get refresh token from header: %v", err)
+		RespondWithError(w, http.StatusBadRequest, "Couldn't find token", err)
+		return
+	}
 
+	_, err = cfg.DB.RevokeRefreshToken(r.Context(), refreshToken)
+	if err != nil {
+		log.Printf("api.go - RevokeRefreshToken() - Error trying to revoke refresh token: %v", err)
+		RespondWithError(w, http.StatusInternalServerError, "Couldn't revoke session", err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 } // End RevokeRefreshToken() func
