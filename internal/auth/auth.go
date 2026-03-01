@@ -15,10 +15,17 @@ import (
 	"github.com/google/uuid"
 )
 
+type TokenType string
+
+const (
+	// TokenTypeAccess -
+	TokenTypeAccess TokenType = "chirpy-access"
+)
+
 func HashPassword(password string) (string, error) {
 	hashedPassword, err := argon2id.CreateHash(password, argon2id.DefaultParams)
 	if err != nil {
-		log.Fatal(err)
+		log.Printf("auth.go - HashPassword() - Error hashing password: %v", err)
 		return "", err
 	}
 
@@ -28,6 +35,7 @@ func HashPassword(password string) (string, error) {
 func CheckPasswordHash(password, hash string) (bool, error) {
 	match, err := argon2id.ComparePasswordAndHash(password, hash)
 	if err != nil {
+		log.Printf("auth.go - CheckPasswordHash() - Error checking password hash: %v", err)
 		return false, err
 	}
 
@@ -36,45 +44,48 @@ func CheckPasswordHash(password, hash string) (bool, error) {
 
 func MakeJWT(userID uuid.UUID, tokenSecret string, expiresIn time.Duration) (string, error) {
 	newToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
-		Issuer: "chirpy",
+		Issuer: string(TokenTypeAccess),
 		IssuedAt: jwt.NewNumericDate(time.Now().UTC()),
 		ExpiresAt: jwt.NewNumericDate(time.Now().UTC().Add(expiresIn)),
 		Subject: userID.String(),
 	})
 
-	jwt, err := newToken.SignedString([]byte(tokenSecret))
-	if err != nil {
-		return "", err
-	}
-
-	return jwt, nil
+	return newToken.SignedString([]byte(tokenSecret))
 } // End MakeJWT() func
 
 func ValidateJWT(tokenString, tokenSecret string) (uuid.UUID, error) {
-	keyFunc := func(token *jwt.Token) (interface{}, error) {
-		return []byte(tokenSecret), nil
-	}
+	claimsStruct := jwt.RegisteredClaims{}
+	token, err := jwt.ParseWithClaims(
+		tokenString,
+		&claimsStruct,
+		func(token *jwt.Token) (interface{}, error) { return []byte(tokenSecret), nil },
+	)
 
-	token, err := jwt.ParseWithClaims(tokenString, &jwt.RegisteredClaims{}, keyFunc)
 	if err != nil {
+		log.Printf("auth.go - ValidateJWT() - Error calling jwt.ParseWithClaims: %v", err)
 		return uuid.Nil, err
 	}
 
 	userIDString, err := token.Claims.GetSubject()
 	if err != nil {
+		log.Printf("auth.go - ValidateJWT() - Error getting token subject: %v", err)
 		return uuid.Nil, err
 	}
 
 	issuer, err := token.Claims.GetIssuer()
 	if err != nil {
+		log.Printf("auth.go - ValidateJWT() - Error getting token issuer: %v", err)
 		return uuid.Nil, err
 	}
-	if issuer != "chirpy" {
+
+	if issuer != string(TokenTypeAccess) {
+		log.Printf("auth.go - ValidateJWT() - Error checking token issuer: %v", err)
 		return uuid.Nil, errors.New("invalid issuer")
 	}
 
 	id, err := uuid.Parse(userIDString)
 	if err != nil {
+		log.Printf("auth.go - ValidateJWT() - Error parsing userID: %v", err)
 		return uuid.Nil, fmt.Errorf("invalid user ID: %w", err)
 	}
 
@@ -84,29 +95,22 @@ func ValidateJWT(tokenString, tokenSecret string) (uuid.UUID, error) {
 func GetBearerToken(headers http.Header) (string, error) {
 	authHeader := headers.Get("Authorization")
 	if authHeader == "" {
-		return "", errors.New("authorization header missing")
+		log.Printf("auth.go - GetBearerToken() - No Authorization header included in request")
+		return "", errors.New("no auth header included in request")
 	}
 
-	const prefix = "Bearer "
-	if !strings.HasPrefix(authHeader, prefix) {
-		return "", errors.New("authorization header is not a bearer token")
+	splitAuth := strings.Split(authHeader, " ")
+	if len(splitAuth) < 2 || splitAuth[0] != "Bearer" {
+		log.Printf("auth.go - GetBearerToken() - Malformed Authorization header: %s", authHeader)
+		return "", errors.New("malformed authorization header")
 	}
 
-	token := strings.TrimPrefix(authHeader, prefix)
-	if token == "" {
-		return "", errors.New("bearer token is empty")
-	}
-
-	return token, nil
-} // End GetBearerToken() func
+	log.Printf("auth.go - GetBearerToken() - Successfully retrieved bearer token from header: %s", splitAuth[1])
+	return splitAuth[1], nil
+}// End GetBearerToken() func
 
 func MakeRefreshToken() (string, error) {
 	byteArr := make([]byte, 32)
-
-	_, err := rand.Read(byteArr)
-	if err != nil {
-		return "", err
-	}
-
+	rand.Read(byteArr)
 	return hex.EncodeToString(byteArr), nil
 } // End MakeRefreshToken() func
