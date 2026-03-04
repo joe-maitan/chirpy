@@ -25,23 +25,25 @@ func main() {
 	godotenv.Load()
 
 	const filepathRoot = "."
-	const port = "8080"
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		log.Fatal("PORT environment variable is not set")
+	}
 
 	dbURL := os.Getenv("DB_URL")
 	if dbURL == "" {
-		log.Fatal("DB_URL must be set")
+		log.Fatal("DB_URL environment variable is not set")
 	}
 
 	dbConn, err := sql.Open("postgres", dbURL)
 	if err != nil {
-		log.Fatalf("Error opening database: %s", err)
+		log.Fatalf("Error opening database connection: %s", err)
 	}
-
-	dbQueries := database.New(dbConn)
 
 	cfg := apiConfig{
 		fileServerHits: atomic.Int32{},
-		db:             dbQueries,
+		db:             database.New(dbConn),
 		platform:       os.Getenv("PLATFORM"),
 		jwtSecret:      os.Getenv("SECRET"),
 		polkaAPIKey: 	os.Getenv("POLKA_API_KEY"),
@@ -49,7 +51,6 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	// TODO: Add middleware for logging and rate limiting as needed.
 	mux.Handle("/app/", cfg.MiddlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir(".")))))
 
 	// Method specific routing. [METHOD ][HOST]/[PATH]
