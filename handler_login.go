@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"time"
 	"net/http"
 	"encoding/json"
@@ -25,21 +24,20 @@ func (cfg *apiConfig) HandleUserLogin(w http.ResponseWriter, r *http.Request) {
 	params := parameters{}
 	err := decoder.Decode(&params)
 	if err != nil {
-		log.Printf("api.go - HandleUserLogin() - Error decoding parameters: %v", err)
+		logStatement("handler_login.go", "HandleUserLogin()", "Error decoding parameters", err)
 		respondWithError(w, http.StatusInternalServerError, "Couldn't decode parameters", err)
 		return
 	}
 
 	user, err := cfg.db.GetUserByEmail(r.Context(), params.Email)
 	if err != nil {
-		log.Printf("api.go - HandleUserLogin() - Error getting user by email: %v", err)
+		logStatement("handler_login.go", "HandleUserLogin()", "Error getting user by email", err)
 		respondWithError(w, http.StatusUnauthorized, "Incorrect email or password", err)
 		return
 	}
 
 	match, err := auth.CheckPasswordHash(params.Password, user.HashedPassword)
 	if err != nil || !match {
-		log.Printf("api.go - HandleUserLogin() - Error checking password hash: %v", err)
 		respondWithError(w, http.StatusUnauthorized, "Incorrect email or password", err)
 		return
 	}
@@ -50,14 +48,14 @@ func (cfg *apiConfig) HandleUserLogin(w http.ResponseWriter, r *http.Request) {
 		time.Hour,
 	)
 	if err != nil {
-		log.Printf("api.go - HandleUserLogin() - Error creating access JWT: %v", err)
+		logStatement("handler_login.go", "HandleUserLogin()", "Error creating access JWT", err)
 		respondWithError(w, http.StatusInternalServerError, "Couldn't create access JWT", err)
 		return
 	}
 
 	refreshToken, err := auth.MakeRefreshToken()
 	if err != nil {
-		log.Printf("api.go - HandleUserLogin() - Error creating refresh token: %v", err)
+		logStatement("handler_login.go", "HandleUserLogin()", "Error creating refresh token", err)
 		respondWithError(w, http.StatusInternalServerError, "Couldn't create refresh token", err)
 		return
 	}
@@ -67,8 +65,9 @@ func (cfg *apiConfig) HandleUserLogin(w http.ResponseWriter, r *http.Request) {
 		Token:     refreshToken,
 		ExpiresAt: time.Now().UTC().Add(time.Hour * 24 * 60),
 	})
+
 	if err != nil {
-		log.Printf("api.go - HandleUserLogin() - Error saving refresh token: %v", err)
+		logStatement("handler_login.go", "HandleUserLogin()", "Error saving refresh token in db", err)
 		respondWithError(w, http.StatusInternalServerError, "Couldn't save refresh token", err)
 		return
 	}

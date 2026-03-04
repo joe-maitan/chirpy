@@ -71,7 +71,7 @@ func main() {
 	mux.HandleFunc("GET  /admin/metrics", cfg.HandlerMetrics)
 	mux.HandleFunc("POST /admin/reset", cfg.HandlerReset)
 
-	mux.HandleFunc("POST /api/polka/webhooks", cfg.HandlePolkaWebhook) // Handle webhook
+	mux.HandleFunc("POST /api/polka/webhooks", cfg.HandlePolkaWebhook)
 
 	/* A http.Server is a struct that describes a server configuration */
 	server := http.Server{
@@ -79,7 +79,7 @@ func main() {
 		Addr:    ":" + port,
 	}
 
-	fmt.Printf("Server started on: %v...\n", server.Addr)
+	fmt.Printf("Server started on: localhost:%v/app/\n", port)
 
 	/* ListenAndServe() blocks the main function until the server shuts down or an
 	unexpected error crashes it. */

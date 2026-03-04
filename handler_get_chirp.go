@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -11,7 +10,7 @@ import (
 func (cfg *apiConfig) HandleGetAllChirps(w http.ResponseWriter, r *http.Request) {
 	DBChirps, err := cfg.db.GetAllChirps(r.Context())
 	if err != nil {
-		log.Printf("api.go - HandleGetAllChirps() - Error getting all chirps: %v", err)
+		logStatement("handler_get_chirp", "HandleGetAllChirps()", "Error getting all chirps", err)
 		respondWithError(w, http.StatusInternalServerError, "Error getting all chirps", err)
 		return
 	}
@@ -31,7 +30,7 @@ func (cfg *apiConfig) HandleGetAllChirps(w http.ResponseWriter, r *http.Request)
 } // End HandleGetAllChirps() func
 
 func (cfg *apiConfig) HandleGetChirp(w http.ResponseWriter, r *http.Request) {
-	log.Println(r.PathValue("chirpID"))
+	// log.Println(r.PathValue("chirpID"))
 	chirpID := r.PathValue("chirpID")
 	if chirpID == "" {
 		respondWithError(w, http.StatusNotFound, "Invalid chirp ID", nil)
@@ -46,6 +45,7 @@ func (cfg *apiConfig) HandleGetChirp(w http.ResponseWriter, r *http.Request) {
 
 	chirp, err := cfg.db.GetChirp(r.Context(), data)
 	if err != nil {
+		logStatement("handler_get_chirp", "HandleGetChirp()", "Error finding chirp", err)
 		respondWithError(w, http.StatusNotFound, "Error finding chirp", err)
 		return
 	}

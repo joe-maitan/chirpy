@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"net/http"
 	"encoding/json"
 
@@ -19,14 +18,19 @@ func (cfg *apiConfig) HandleCreateUser(w http.ResponseWriter, r *http.Request) {
 	params := parameters{}
 	err := decoder.Decode(&params)
 	if err != nil {
-		log.Printf("api.go - HandleCreateUser() - Error decoding parameters: %v", err)
+		logStatement("handler_create_user.go", "HandleCreateUser()", "Error decoding parameters", err)
 		respondWithError(w, http.StatusInternalServerError, "Error decoding parameters", err)
+		return
+	}
+
+	if params.Email == "" || params.Password == "" {
+		respondWithError(w, http.StatusBadRequest, "Email and password are required", nil)
 		return
 	}
 
 	hashedPassword, err := auth.HashPassword(params.Password)
 	if err != nil {
-		log.Printf("api.go - HandleCreateUser() - Error hashing password: %v", err)
+		logStatement("handler_create_user.go", "HandleCreateUser()", "Error hashing password", err)
 		respondWithError(w, http.StatusInternalServerError, "Error hashing password", err)
 		return
 	}
@@ -37,7 +41,7 @@ func (cfg *apiConfig) HandleCreateUser(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if err != nil {
-		log.Printf("api.go - HandleCreateUser() - Error creating user: %v", err)
+		logStatement("handler_create_user.go", "HandleCreateUser()", "Error creating user", err)
 		respondWithError(w, http.StatusInternalServerError, "Error creating user", err)
 		return
 	}

@@ -21,14 +21,12 @@ func (cfg *apiConfig) HandlePolkaWebhook(w http.ResponseWriter, r *http.Request)
 
 	fetchedKey, err := auth.GetAPIKey(r.Header)
 	if err != nil {
-		log.Printf("api.go - HandlePolkaWebhook() - Error trying to get API key from header: %v", err)
-		respondWithError(w, 401, "Missing API key", err)
+		respondWithError(w, http.StatusUnauthorized, "Missing API key", err)
 		return
 	}
 
 	if fetchedKey != cfg.polkaAPIKey {
-		log.Printf("api.go - HandlePolkaWebhook() - Invalid API key: %s", fetchedKey)
-		respondWithError(w, 401, "Invalid API key", nil)
+		respondWithError(w, http.StatusUnauthorized, "Invalid API key", nil)
 		return
 	}
 
@@ -36,7 +34,6 @@ func (cfg *apiConfig) HandlePolkaWebhook(w http.ResponseWriter, r *http.Request)
 	params := parameters{}
 	err = decoder.Decode(&params)
 	if err != nil {
-		log.Printf("api.go - HandleUpdateUser() - Error decoding parameters: %v", err)
 		respondWithError(w, http.StatusUnauthorized, "Error decoding parameters", err)
 		return
 	}
@@ -44,34 +41,31 @@ func (cfg *apiConfig) HandlePolkaWebhook(w http.ResponseWriter, r *http.Request)
 	log.Printf("Received Polka webhook - Event: %s, Data: %s", params.Event, params.Data)
 
 	if params.Event != "user.upgraded" {
-		w.WriteHeader(204)
+		w.WriteHeader(http.StatusNoContent)
 		w.Write([]byte("Webhook received but no action taken"))
 	}
 
 	userID, err := uuid.Parse(params.Data.UserID)
 	if err != nil {
-		log.Printf("api.go - HandlePolkaWebhook() - Error parsing user ID: %v", err)
-		respondWithError(w, 400, "Invalid user ID format", err)
+		respondWithError(w, http.StatusBadRequest, "Invalid user ID format", err)
 		return
 	}
 
 	fetchedUser, err := cfg.db.GetUserByID(r.Context(), userID)
 	if err != nil {
-		log.Printf("api.go - HandlePolkaWebhook() - Error fetching user by ID: %v", err)
-		respondWithError(w, 404, "Error fetching user", err)
+		respondWithError(w, http.StatusNotFound, "Error fetching user", err)
 		return
 	}
 
 	if fetchedUser.ID != userID {
-		log.Printf("api.go - HandlePolkaWebhook() - User ID mismatch: expected %s, got %s", userID, fetchedUser.ID)
-		respondWithError(w, 500, "User ID mismatch", nil)
+		respondWithError(w, http.StatusInternalServerError, "User ID mismatch", nil)
 		return
 	}
 
 	_, err = cfg.db.UpgradeUserToChirpyRed(r.Context(), userID)
 	if err != nil {
 		log.Printf("api.go - HandlePolkaWebhook() - Error upgrading user to Chirpy Red: %v", err)
-		respondWithError(w, 500, "Error upgrading user to Chirpy Red", err)
+		respondWithError(w, http.StatusInternalServerError, "Error upgrading user to Chirpy Red", err)
 		return
 	}
 

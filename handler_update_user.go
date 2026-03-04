@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"time"
 	"net/http"
 	"encoding/json"
@@ -33,7 +32,6 @@ func (cfg *apiConfig) HandleUpdateUser(w http.ResponseWriter, r *http.Request) {
 
 	userID, err := auth.ValidateJWT(token, cfg.jwtSecret)
 	if err != nil {
-		log.Printf("api.go - HandleUpdateUser() - Error trying to call auth.ValidateJWT: %v", err)
 		respondWithError(w, http.StatusUnauthorized, "Could not validate JWT", err)
 		return
 	}
@@ -42,14 +40,12 @@ func (cfg *apiConfig) HandleUpdateUser(w http.ResponseWriter, r *http.Request) {
 	params := parameters{}
 	err = decoder.Decode(&params)
 	if err != nil {
-		log.Printf("api.go - HandleUpdateUser() - Error decoding parameters: %v", err)
 		respondWithError(w, http.StatusUnauthorized, "Error decoding parameters", err)
 		return
 	}
 
 	hashedPassword, err := auth.HashPassword(params.Password)
 	if err != nil {
-		log.Printf("api.go - HandleUpdateUser() - Error hashing password: %v", err)
 		respondWithError(w, http.StatusInternalServerError, "Error hashing password", err)
 		return
 	}
@@ -61,7 +57,6 @@ func (cfg *apiConfig) HandleUpdateUser(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if err != nil {
-		log.Printf("api.go - HandleUpdateUser() - Error updating user: %v", err)
 		respondWithError(w, http.StatusInternalServerError, "Error updating user", err)
 		return
 	}

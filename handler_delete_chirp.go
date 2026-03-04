@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -18,7 +17,7 @@ func (cfg *apiConfig) HandleDeleteChirp(w http.ResponseWriter, r *http.Request) 
 
 	userID, err := auth.ValidateJWT(token, cfg.jwtSecret)
 	if err != nil {
-		log.Printf("api.go - HandleUpdateUser() - Error trying to call auth.ValidateJWT: %v", err)
+		logStatement("handler_delete_chirp", "HandleDeleteChirp()", "Error trying to call auth.ValidateJWT", err)
 		respondWithError(w, http.StatusUnauthorized, "Could not validate JWT", err)
 		return
 	}
@@ -51,7 +50,7 @@ func (cfg *apiConfig) HandleDeleteChirp(w http.ResponseWriter, r *http.Request) 
 		UserID: userID,
 	})
 	if err != nil {
-		log.Printf("api.go - HandleDeleteChirp() - Error deleting chirp: %v", err)
+		logStatement("handler_delete_chirp", "HandleDeleteChirp()", "Error deleting chirp", err)
 		respondWithError(w, http.StatusInternalServerError, "Error deleting chirp", err)
 		return
 	}

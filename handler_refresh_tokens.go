@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"time"
 	"net/http"
 
@@ -21,7 +20,6 @@ func (cfg *apiConfig) CheckRefreshToken(w http.ResponseWriter, r *http.Request) 
 
 	user, err := cfg.db.GetUserFromRefreshToken(r.Context(), refreshToken)
 	if err != nil {
-		log.Printf("api.go - CheckRefreshToken() - Error trying to get user from refresh token: %v", err)
 		respondWithError(w, http.StatusUnauthorized, "Could not get user from refresh token", err)
 		return
 	}
@@ -33,7 +31,7 @@ func (cfg *apiConfig) CheckRefreshToken(w http.ResponseWriter, r *http.Request) 
 	)
 
 	if err != nil {
-		log.Printf("api.go - CheckRefreshToken() - Error trying to create access JWT: %v", err)
+		logStatement("handler_refresh_token.go", "CheckRefreshToken()", "Error trying to ", err)
 		respondWithError(w, http.StatusInternalServerError, "Couldn't validate token", err)
 		return
 	}
@@ -46,14 +44,12 @@ func (cfg *apiConfig) CheckRefreshToken(w http.ResponseWriter, r *http.Request) 
 func (cfg *apiConfig) RevokeRefreshToken(w http.ResponseWriter, r *http.Request) {
 	refreshToken, err := auth.GetBearerToken(r.Header)
 	if err != nil {
-		log.Printf("api.go - RevokeRefreshToken() - Error trying to get refresh token from header: %v", err)
 		respondWithError(w, http.StatusBadRequest, "Couldn't find token", err)
 		return
 	}
 
 	_, err = cfg.db.RevokeRefreshToken(r.Context(), refreshToken)
 	if err != nil {
-		log.Printf("api.go - RevokeRefreshToken() - Error trying to revoke refresh token: %v", err)
 		respondWithError(w, http.StatusInternalServerError, "Couldn't revoke session", err)
 		return
 	}

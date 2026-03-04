@@ -1,32 +1,30 @@
 package main
 
 import (
-	"log"
-	"errors"
 	"strings"
 	"net/http"
 	"encoding/json"
 
-	// "github.com/google/uuid"
 	"github.com/joe-maitan/chirpy/internal/auth"
 	"github.com/joe-maitan/chirpy/internal/database"
 )
 
-func validateAndCleanChirp(chirpBody string) (string, error) {
+func validateChirpLength(chirpBody string) (bool) {
+	const maxChirpLength = 140
+	if len(chirpBody) > maxChirpLength {
+		return false
+	}
+
+	return true
+} // End validateChirpLength() func
+
+func cleanChirp(chirpBody string) (string) {
 	badWords := []string{
 		"kerfuffle",
 		"sharbert",
 		"fornax",
 	}
 
-	// 1. Validate the length of the chirp.
-	const maxChirpLength = 140
-	if len(chirpBody) > maxChirpLength {
-		// respondWithError(w, http.StatusBadRequest, "Chirp is too long", nil)
-		return "", errors.New("Chirp is too long")
-	}
-
-	// 2. Clean the chirp for any bad words.
 	words := strings.Split(chirpBody, " ")
 	for _, word := range words {
 		for _, pottyWord := range badWords {
@@ -36,8 +34,8 @@ func validateAndCleanChirp(chirpBody string) (string, error) {
 		}
 	}
 
-	return chirpBody, nil
-} // End validateAndCleanChirp()
+	return chirpBody
+} // End cleanChirp() func
 
 func (cfg *apiConfig) HandleCreateChirp(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
@@ -67,19 +65,19 @@ func (cfg *apiConfig) HandleCreateChirp(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	chirpBody, err := validateAndCleanChirp(params.Body)
-	if err != nil {
-		log.Printf("handler_create_chirp.go")
+	if !validateChirpLength(params.Body) {
+		logStatement("handler_create_chirp.go","HandleCreateChirp()", "Chirp is too long", err)
 		respondWithError(w, http.StatusBadRequest, "", err)
 	}
 
+	chirpBody := cleanChirp(params.Body)
 	chirp, err := cfg.db.CreateChirp(r.Context(), database.CreateChirpParams{
 		Body:   chirpBody,
 		UserID: userID,
 	})
 
 	if err != nil {
-		log.Printf("api.go - HandleCreateChirp() - Error creating chirp: %v", err)
+		logStatement("handler_create_chirp.go","HandleCreateChirp()", "Error creating chirp", err)
 		respondWithError(w, http.StatusInternalServerError, "Error creating chirp", err)
 		return
 	}
