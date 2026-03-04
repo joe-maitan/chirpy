@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
-	"github.com/joe-maitan/chirpy/internal/database"
 )
 
 func (cfg *apiConfig) HandleGetAllChirps(w http.ResponseWriter, r *http.Request) {
@@ -15,9 +14,9 @@ func (cfg *apiConfig) HandleGetAllChirps(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	chirps := []database.Chirp{}
+	chirps := []Chirp{}
 	for _, c := range DBChirps {
-		chirps = append(chirps, database.Chirp{
+		chirps = append(chirps, Chirp{
 			ID:        c.ID,
 			CreatedAt: c.CreatedAt,
 			UpdatedAt: c.UpdatedAt,
@@ -50,7 +49,7 @@ func (cfg *apiConfig) HandleGetChirp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondWithJSON(w, http.StatusOK, database.Chirp{
+	respondWithJSON(w, http.StatusOK, Chirp{
 		ID:        chirp.ID,
 		CreatedAt: chirp.CreatedAt,
 		UpdatedAt: chirp.UpdatedAt,
