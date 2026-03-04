@@ -1,16 +1,16 @@
 package main
 
 import (
-	"encoding/json"
 	"log"
-	"net/http"
 	"time"
-
+	"net/http"
+	"encoding/json"
+	
 	"github.com/joe-maitan/chirpy/internal/auth"
 	"github.com/joe-maitan/chirpy/internal/database"
 )
 
-func (cfg *Config) HandleUserLogin(w http.ResponseWriter, r *http.Request) {
+func (cfg *apiConfig) HandleUserLogin(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
 		Password string `json:"password"`
 		Email    string `json:"email"`
@@ -30,7 +30,7 @@ func (cfg *Config) HandleUserLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := cfg.DB.GetUserByEmail(r.Context(), params.Email)
+	user, err := cfg.db.GetUserByEmail(r.Context(), params.Email)
 	if err != nil {
 		log.Printf("api.go - HandleUserLogin() - Error getting user by email: %v", err)
 		respondWithError(w, http.StatusUnauthorized, "Incorrect email or password", err)
@@ -46,7 +46,7 @@ func (cfg *Config) HandleUserLogin(w http.ResponseWriter, r *http.Request) {
 
 	accessToken, err := auth.MakeJWT(
 		user.ID,
-		cfg.JWTSecret,
+		cfg.jwtSecret,
 		time.Hour,
 	)
 	if err != nil {
@@ -62,7 +62,7 @@ func (cfg *Config) HandleUserLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = cfg.DB.CreateRefreshToken(r.Context(), database.CreateRefreshTokenParams{
+	_, err = cfg.db.CreateRefreshToken(r.Context(), database.CreateRefreshTokenParams{
 		UserID:    user.ID,
 		Token:     refreshToken,
 		ExpiresAt: time.Now().UTC().Add(time.Hour * 24 * 60),
@@ -75,11 +75,11 @@ func (cfg *Config) HandleUserLogin(w http.ResponseWriter, r *http.Request) {
 
 	respondWithJSON(w, http.StatusOK, response{
 		User: database.User{
-			ID:        user.ID,
-			CreatedAt: user.CreatedAt,
-			UpdatedAt: user.UpdatedAt,
-			Email:     user.Email,
-			IsChirpyRed: user.IsChirpyRed,
+			ID:        		user.ID,
+			CreatedAt: 		user.CreatedAt,
+			UpdatedAt: 		user.UpdatedAt,
+			Email:     		user.Email,
+			IsChirpyRed: 	user.IsChirpyRed,
 		},
 		Token:        accessToken,
 		RefreshToken: refreshToken,

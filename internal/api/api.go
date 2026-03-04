@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/rand"
 	"net/http"
 	"strings"
 	"sync/atomic"
@@ -36,78 +37,13 @@ type Chirp struct {
 
 
 
-func (cfg *Config) HandlerReadiness(w http.ResponseWriter, r *http.Request) {
-	w.Header().Add("Content-Type", "text/plain; charset=utf-8")
-	w.WriteHeader(200)
-	w.Write([]byte(http.StatusText(200)))
-} // End HandlerReadiness() func
 
-func (cfg *Config) HandlerMetrics(w http.ResponseWriter, r *http.Request) {
-	w.Header().Add("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(200)
-	w.Write([]byte(fmt.Sprintf("<html><body><h1>Welcome, Chirpy Admin</h1><p>Chirpy has been visited %d times!</p></body></html>", cfg.FileServerHits.Load())))
-} // End handlerMetrics() func
 
-func (cfg *Config) HandlerReset(w http.ResponseWriter, r *http.Request) {
-	if cfg.Platform != "dev" {
-		RespondWithError(w, 403, "Forbidden", nil)
-		return
-	}
 
-	cfg.DB.DeleteUsers(r.Context())
-	cfg.FileServerHits.Store(0)
-	w.WriteHeader(200)
-	w.Write([]byte("Hits reset to 0"))
-} // End HandlerReset() func
 
-func (cfg *Config) MiddlewareMetricsInc(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cfg.FileServerHits.Add(1)
-		next.ServeHTTP(w, r)
-	})
-} // End MiddlewareMetricsInc() func
 
-func (cfg *Config) HandleCreateUser(w http.ResponseWriter, r *http.Request) {
-	type parameters struct {
-		Email    string `json:"email"`
-		Password string `json:"password"`
-	}
 
-	decoder := json.NewDecoder(r.Body)
-	params := parameters{}
-	err := decoder.Decode(&params)
-	if err != nil {
-		log.Printf("api.go - HandleCreateUser() - Error decoding parameters: %v", err)
-		RespondWithError(w, http.StatusInternalServerError, "Error decoding parameters", err)
-		return
-	}
 
-	hashedPassword, err := auth.HashPassword(params.Password)
-	if err != nil {
-		log.Printf("api.go - HandleCreateUser() - Error hashing password: %v", err)
-		RespondWithError(w, http.StatusInternalServerError, "Error hashing password", err)
-		return
-	}
-
-	user, err := cfg.DB.CreateUser(r.Context(), database.CreateUserParams{
-		Email:          params.Email,
-		HashedPassword: hashedPassword,
-	})
-
-	if err != nil {
-		log.Printf("api.go - HandleCreateUser() - Error creating user: %v", err)
-		RespondWithError(w, http.StatusInternalServerError, "Error creating user", err)
-		return
-	}
-
-	RespondWithJSON(w, http.StatusCreated, User{
-		ID:        user.ID,
-		CreatedAt: user.CreatedAt,
-		UpdatedAt: user.UpdatedAt,
-		Email:     user.Email,
-		IsChirpyRed: user.IsChirpyRed,
-	})
-} // End HandleCreateUser() func
 
 
 
