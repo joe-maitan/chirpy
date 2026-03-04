@@ -11,6 +11,6 @@ ENV SECRET
 ENV POLKA_API_KEY
 
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=5s \
-  CMD curl -f http://localhost//api/healthz || exit 1
+  CMD curl -f http://localhost:$PORT/api/healthz || exit 1
 
 CMD ["/bin/chirpy"]
