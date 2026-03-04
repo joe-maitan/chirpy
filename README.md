@@ -1,5 +1,5 @@
 # Chirpy
-Chirpy is a social network similar to twitter. This project is a production style HTTP server in Go, without the use of a framework.
+Chirpy is a social network similar to Twitter. This project is a production style HTTP server in Go, without the use of a framework.
 
 ## Highlights
 * Basic Go HTTP Server with social media API func.
@@ -8,19 +8,24 @@ Chirpy is a social network similar to twitter. This project is a production styl
 * Use Webhooks to allow premium users to edit posted chirps.
 
 ## Overview
-This work was done as apart of a course on boot.dev.
+This work was done as apart of a course on boot.dev. I took this course to expand my knowledge of Go development and learn how to make HTTP server in Go.
 
 ## Usage
 Chirpy is technically a monolith project, but a lot of the development was focused on the API. In the future, I would like to make a seperate front end that communicates with this backend.
 
 ### Docker
+1. Build and run locally.
+    ```
+    docker build . -t chirpy:dev
+    docker run chirpy
+    ```
 
-## Locally
-### Install steps
-#### PostgreSQL
+### Locally
+#### Install steps
+##### PostgreSQL
 PostgreSQL is a production-ready, open-source SQL database. You will need to look up the instructions for installing and setting up PostgreSQL on your machine before beginning.
 
-#### Goose
+##### Goose
 Goose is a database migration tool written in Go. It runs migrations from a set of SQL files, making it a perfect fit for this project (we wanna stay close to the raw SQL).
 
 A migration is just a set of changes to your database table. You can have as many migrations as needed as your requirements change over time. For example, one migration might create a new table, one might delete a column, and one might add 2 new columns.
@@ -63,7 +68,7 @@ If something breaks, you can run one of the "down" migrations to revert the data
     goose postgres <connection_string> up
     ```
 
-#### SQLC
+##### SQLC
 1. Install. Requires Go 1.21+.
     ```
     go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
@@ -81,20 +86,27 @@ If something breaks, you can run one of the "down" migrations to revert the data
     sqlc generate
     ```
 
-#### Running the program
+##### Running the program
 1. Install all the `go.mod` dependencies.
     ```
     go mod tidy
     ```
 
-2. Give permissions to the `run.sh` script and run the program:
+2. Create your own `.env` file from the `.env.example` file:
+    ```
+    cp .env.example .env
+    ```
+
+    And then fill in the variables.
+
+3. Give permissions to the `run.sh` script and run the program:
     ```
     chmod +x run.sh
     ./run.sh
     ```
 
 ## What I learned about
-## Middleware
+### Middleware
 Middleware is a way to wrap a handler with additional functionality. It is a common pattern in web applications that allows us to write DRY code.
 
 ### Architecture
@@ -111,5 +123,5 @@ Used JWTs and refresh tokens for user authentciation. The JWTs were to authentic
 ### Authorization
 Through the use of the JWTs and refresh tokens we can know authorize a user to do certain things if they are trying to either update their email or password. Or if they would like to delete a chirpy they posted.
 
-## Webhooks
+### Webhooks
 A webhook is an event that is sent to your server by an external service when  something happens. 
