@@ -8,11 +8,18 @@ import (
 	"os"
 	"sync/atomic"
 
-	"github.com/joe-maitan/chirpy/internal/api"
 	"github.com/joe-maitan/chirpy/internal/database"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 )
+
+type Config struct {
+	FileServerHits atomic.Int32
+	DB             *database.Queries // DB driver
+	Platform       string            // platform the api is running on (e.g. "DEV", "PROD")
+	JWTSecret      string            // secret key for signing JWT tokens
+	PolkaAPIKey	   string            // secret key for validating Polka webhooks
+} // End api config struct
 
 func main() {
 	godotenv.Load()
@@ -32,7 +39,7 @@ func main() {
 
 	dbQueries := database.New(dbConn)
 
-	apiCfg := api.Config{
+	apiCfg := Config{
 		FileServerHits: atomic.Int32{},
 		DB:             dbQueries,
 		Platform:       os.Getenv("PLATFORM"),
@@ -43,7 +50,7 @@ func main() {
 	mux := http.NewServeMux()
 
 	// TODO: Add middleware for logging and rate limiting as needed.
-	mux.Handle("/app/", apiCfg.MiddlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir(".")))))
+	mux.Handle("/app/", apiCfg.middlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir(".")))))
 
 	// Method specific routing. [METHOD ][HOST]/[PATH]
 	// Basic health check
