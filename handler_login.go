@@ -4,7 +4,7 @@ import (
 	"time"
 	"net/http"
 	"encoding/json"
-	
+
 	"github.com/joe-maitan/chirpy/internal/auth"
 	"github.com/joe-maitan/chirpy/internal/database"
 )
@@ -15,7 +15,7 @@ func (cfg *apiConfig) HandleUserLogin(w http.ResponseWriter, r *http.Request) {
 		Email    string `json:"email"`
 	}
 	type response struct {
-		database.User
+		User
 		Token        string `json:"token"`
 		RefreshToken string `json:"refresh_token"`
 	}
@@ -73,7 +73,7 @@ func (cfg *apiConfig) HandleUserLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondWithJSON(w, http.StatusOK, response{
-		User: database.User{
+		User: User{
 			ID:        		user.ID,
 			CreatedAt: 		user.CreatedAt,
 			UpdatedAt: 		user.UpdatedAt,
