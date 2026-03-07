@@ -1,12 +1,16 @@
 FROM alpine
 
-COPY chirpy .
+COPY chirpy /bin/chirpy
 
-ENV PORT=8991
+RUN apt-get update && apt-get install -y curl
+
+ENV PORT
 ENV DB_URL
 ENV PLATFORM
 ENV SECRET
+ENV POLKA_API_KEY
 
-HEALTHCHECK NONE
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=5s \
+  CMD curl -f http://localhost:$PORT/api/healthz || exit 1
 
-CMD ["./chirpy"]
+CMD ["/bin/chirpy"]

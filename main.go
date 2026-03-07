@@ -8,70 +8,71 @@ import (
 	"os"
 	"sync/atomic"
 
-	"github.com/joe-maitan/chirpy/internal/api"
 	"github.com/joe-maitan/chirpy/internal/database"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 )
 
+type apiConfig struct {
+	fileServerHits atomic.Int32
+	db             *database.Queries // DB driver
+	platform       string            // platform the api is running on (e.g. "DEV", "PROD")
+	jwtSecret      string            // secret key for signing JWT tokens
+	polkaAPIKey	   string            // secret key for validating Polka webhooks
+} // End api config struct
+
 func main() {
 	godotenv.Load()
 
 	const filepathRoot = "."
-	const port = "8080"
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		log.Fatal("PORT environment variable is not set")
+	}
 
 	dbURL := os.Getenv("DB_URL")
 	if dbURL == "" {
-		log.Fatal("DB_URL must be set")
+		log.Fatal("DB_URL environment variable is not set")
 	}
 
 	dbConn, err := sql.Open("postgres", dbURL)
 	if err != nil {
-		log.Fatalf("Error opening database: %s", err)
+		log.Fatalf("Error opening database connection: %s", err)
 	}
 
-	dbQueries := database.New(dbConn)
-
-	apiCfg := api.Config{
-		FileServerHits: atomic.Int32{},
-		DB:             dbQueries,
-		Platform:       os.Getenv("PLATFORM"),
-		JWTSecret:      os.Getenv("SECRET"),
-		PolkaAPIKey: os.Getenv("POLKA_API_KEY"),
+	cfg := apiConfig{
+		fileServerHits: atomic.Int32{},
+		db:             database.New(dbConn),
+		platform:       os.Getenv("PLATFORM"),
+		jwtSecret:      os.Getenv("SECRET"),
+		polkaAPIKey: 	os.Getenv("POLKA_API_KEY"),
 	}
 
 	mux := http.NewServeMux()
 
-	// TODO: Add middleware for logging and rate limiting as needed.
-	mux.Handle("/app/", apiCfg.MiddlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir(".")))))
+	mux.Handle("/app/", cfg.MiddlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir(".")))))
 
 	// Method specific routing. [METHOD ][HOST]/[PATH]
-	// Basic health check
-	mux.HandleFunc("GET  /api/healthz", apiCfg.HandlerReadiness)
+	mux.HandleFunc("GET  /api/healthz", cfg.HandlerReadiness) // Basic health check
 
-	// Creates a new user
-	mux.HandleFunc("POST /api/users", apiCfg.HandleCreateUser)
-	mux.HandleFunc("PUT /api/users", apiCfg.HandleUpdateUser)
+	mux.HandleFunc("POST /api/users", cfg.HandleCreateUser) // Creates a new user.
+	mux.HandleFunc("PUT /api/users", cfg.HandleUpdateUser) // Update a user with new email, password, or both.
+	mux.HandleFunc("POST /api/login", cfg.HandleUserLogin) // Handles a user login
 
-	// Handles a user login
-	mux.HandleFunc("POST /api/login", apiCfg.HandleUserLogin)
+	mux.HandleFunc("POST /api/chirps", cfg.HandleCreateChirp) // Create a chirp.
+	mux.HandleFunc("GET  /api/chirps", cfg.HandleGetAllChirps) // Get all chirps.
+	mux.HandleFunc("GET  /api/chirps/{chirpID}", cfg.HandleGetChirp) // Get a single chirp.
+	mux.HandleFunc("DELETE /api/chirps/{chirpID}", cfg.HandleDeleteChirp) // Delete a chirp.
 
-	// Handles chirp creation, retrieval, and listing
-	mux.HandleFunc("POST /api/chirps", apiCfg.HandleCreateChirp)
-	mux.HandleFunc("GET  /api/chirps", apiCfg.HandleGetAllChirps)
-	mux.HandleFunc("GET  /api/chirps/{chirpID}", apiCfg.HandleGetChirp)
-	mux.HandleFunc("DELETE /api/chirps/{chirpID}", apiCfg.HandleDeleteChirp)
-
-	// Handles refresh token rotation and revocation
-	mux.HandleFunc("POST /api/refresh", apiCfg.CheckRefreshToken)
-	mux.HandleFunc("POST /api/revoke", apiCfg.RevokeRefreshToken)
+	mux.HandleFunc("POST /api/refresh", cfg.CheckRefreshToken) // Check refresh token
+	mux.HandleFunc("POST /api/revoke", cfg.RevokeRefreshToken) // Revoke refresh token
 
 	// Admin routes
-	mux.HandleFunc("GET  /admin/metrics", apiCfg.HandlerMetrics)
-	mux.HandleFunc("POST /admin/reset", apiCfg.HandlerReset)
+	mux.HandleFunc("GET  /admin/metrics", cfg.HandlerMetrics)
+	mux.HandleFunc("POST /admin/reset", cfg.HandlerReset)
 
-	mux.HandleFunc("POST /api/polka/webhooks", apiCfg.HandlePolkaWebhook)
-
+	mux.HandleFunc("POST /api/polka/webhooks", cfg.HandlePolkaWebhook)
 
 	/* A http.Server is a struct that describes a server configuration */
 	server := http.Server{
@@ -79,7 +80,7 @@ func main() {
 		Addr:    ":" + port,
 	}
 
-	fmt.Printf("Server started on: %v...\n", port)
+	fmt.Printf("Server started on: localhost:%v/app/\n", port)
 
 	/* ListenAndServe() blocks the main function until the server shuts down or an
 	unexpected error crashes it. */
